@@ -180,7 +180,7 @@ docker compose up --build
 
 ## 7. 다음 우선순위
 
-### P0 — 구현본을 정상적으로 원격 복원
+### P0 — 구현본을 정상적으로 원격 복원 ✅ 완료
 
 1. ZIP SHA-256 확인
 2. `feat/commerce-foundation` checkout

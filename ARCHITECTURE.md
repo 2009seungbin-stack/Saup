@@ -1,33 +1,29 @@
 # Saup architecture
 
-Status: implementation in progress; not approved for live commerce or real money.
+Based on `docs/original-requirements.md`. 95% automation is a target, not a measured result.
 
-## Source and scope
+## Decisions before coding
 
-Based on the supplied Saup_95pct_Commerce_Automation_Prompt.md. The repository was confirmed empty before initialization. Ordinary-transaction automation of 95% is a target, not a measured achievement.
+PostgreSQL is authoritative; adapters isolate marketplace, supplier, payment and notification systems. Money is integer KRW, rates Decimal. Explicit state transitions, database uniqueness and business idempotency keys protect transactions. Supplier-specific deposits are not available to other suppliers. Ledger entries are balanced and append-only.
 
-## Design decisions before implementation
+The queue is a transactional PostgreSQL outbox with SKIP LOCKED, expiring leases, bounded retries and dead letters. Redis provides distributed rate limiting. This is the selected equivalent to Celery, avoiding a database/broker dual-write gap. No marketplace synchronization runs in HTTP handlers.
 
-1. PostgreSQL is authoritative. Python 3.12+, FastAPI, SQLAlchemy 2 and Alembic manage the application. SQLite is supported only for deterministic local tests.
-2. Domain rules use integer KRW and Decimal rates, explicit order transitions, immutable histories and balanced ledger postings. Supplier-specific deposits are never available to another supplier.
-3. Commands lock order and treasury rows, use stable business idempotency keys and enforce uniqueness in the database. A key reused with changed parameters is rejected.
-4. External side effects are driven by a transactional, PostgreSQL-backed outbox. Workers claim jobs with SKIP LOCKED, bounded retries and dead-letter/review handling. Redis handles distributed rate limits. This durable job queue is the selected alternative to Celery, avoiding a DB/broker dual-write gap.
-5. Marketplace, supplier, payment and notification ports isolate all external systems. Mock mode is explicitly labelled. Production operations fail with BLOCKED_BY_CREDENTIALS or BLOCKED_BY_PROVIDER_ACCESS until documented, account-authorized access exists. No undocumented marketplace endpoints or banking browser automation.
-6. Excel profiles are supplier-specific. Imports are bounded, validate every row, reject formulas and duplicates, preserve text identifiers and place invalid rows in a durable review queue. Exports do not claim that a supplier has accepted an order.
-7. Original addresses are encrypted and never rewritten. Read models exclude PII. Admin sessions are revocable, HttpOnly and CSRF-protected with role checks and append-only audit records.
-8. A listing's local desired pause and remotely confirmed pause are separate. A failed remote pause is an unresolved incident, not a claim that marketplace sales stopped.
-9. The Next.js console reads actual API/DB state and distinguishes demo data from live data. Real payment code is disabled by default and is not replaced by fake success responses.
+Original addresses are encrypted and never changed. Session tokens are hashed in the database; cookies are HttpOnly with CSRF checks and role-based authorization. No provider credentials are shipped. No live payment connector is implemented; the live flag fails at configuration validation.
 
-## Phases and acceptance gates
+A local listing pause is distinct from a remotely confirmed pause. A failed remote pause remains an unresolved incident; an unreachable marketplace cannot be guaranteed stopped.
 
-- Phase 1: monorepo, configuration, database, migrations, API/auth, worker, Docker, console, health and audit.
-- Phase 2: catalog, suppliers, listings, explicit order state machine, history, treasury, claims and settlements.
-- Phase 3: profile-based price import, order export and shipment import with error isolation.
-- Phase 4: deterministic price/margin/risk/capacity, kill switches and review queue.
-- Phase 5: adapter contracts, persistent demo implementations, explicit production blockers and contract tests.
-- Phase 6: evidence/deadline checks, supplier response, bounded refunds, settlement reconciliation.
-- Phase 7: manual-input discovery scoring and contribution-based experiments.
-- Phase 8: authenticated operational dashboard, queue and transaction trail.
-- Phase 9: failure tests, replay controls, retention, backup/restore and deployment documentation.
+Orders are normalized **fulfillment lines** with `(marketplace, external_order_id, external_line_id)` identity. Combined multi-line cancellation/refund routing remains a production integration gate. Demo fixtures contain synthetic data only.
 
-Each phase records its changes and test results in docs/implementation-status.md. Local tests are not evidence of production PostgreSQL concurrency, live provider access or 95% automation. Production remains gated on those validations.
+## Sequenced implementation plan
+
+1. Foundation: monorepo, configuration, frozen schema, migrations, auth, audit, health, queue, Docker.
+2. Domain: products, suppliers, listings, orders, price history, treasury and ledgers.
+3. Excel: mapping profiles, bounded price/shipment imports, errors, deterministic order exports.
+4. Financial/risk: margin, stock freshness, cash capacity, payment tiers, kill switches.
+5. Adapters: contracts, durable mocks, provider-access blockers; never invented endpoints.
+6. Claims/settlement: evidence and deadline checks, supplier response, bounded refunds, reconciliation.
+7. Discovery: manually sourced scores, provenance, profitable SKU experiments.
+8. Console: authenticated operational UI driven by actual database/API state.
+9. Hardening: failure/replay tests, retention, deployment and backup/restore instructions.
+
+Each increment is implemented and checked locally. See `docs/implementation-status.md` for measured results, limitations and remaining gates. The schema snapshot `schema_v1.py` is frozen at this release; future changes require a new migration rather than editing that snapshot.
