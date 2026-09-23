@@ -15,3 +15,4 @@ artifacts/
 uploads/
 *.log
 *.tsbuildinfo
+*.egg-info/

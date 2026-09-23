@@ -6,7 +6,7 @@
 
 ## 저장소 상태
 
-2026-09-23에 검증된 구현 소스를 GitHub `feat/commerce-foundation` 브랜치에 복원했습니다.
+2026-09-23에 검증된 구현 소스를 GitHub `feat/commerce-foundation` 브랜치와 기본 `main` 브랜치에 복원했습니다.
 
 - 원본 구현 ZIP SHA-256: `8bbe0cc864ac1e250c9c7a30655e0558ad5178670ef2e870d7c140b5a901e0ec`
 - 복원용 소스 아카이브 SHA-256: `4714da169f9b75e39e2375726b619cbccd3c31d56017f051eac0052c205899ab`
@@ -14,9 +14,10 @@
 - GitHub Actions 복원 검증: 성공
 - Python compile: 성공
 - pytest: 성공
-- `main` 브랜치에는 아직 병합하지 않았습니다.
+- `main` 복원 커밋: `5e7617dd6f3d2c038f01ca0fe18aa83679ee3558`
+- 기본 `main` 브랜치 복원 완료
 
-과거 전달용 ZIP은 provenance/백업 용도로만 유지합니다. 현재 개발 source of truth는 복원된 Git 브랜치입니다.
+과거 전달용 ZIP은 provenance/백업 용도로만 유지합니다. 현재 개발 source of truth는 복원된 Git 저장소이며 기본 기준은 `main`입니다.
 
 ## 빠른 시작: Docker 로컬 데모
 
