@@ -4,9 +4,19 @@
 
 첨부 명세를 바탕으로 작성한 Python/FastAPI + PostgreSQL 설계 + Next.js 운영 콘솔입니다. 화면에 하드코딩한 매출을 보여주는 데모가 아니라, DB에 주문·발주·결제 의도·원장·클레임·정산을 기록하고 워커가 처리합니다. 외부 공급사와 마켓은 **명시적인 모의 어댑터**입니다. 운영 자동화율 95%는 측정하지 않았습니다.
 
-## 이번 전달본의 위치
+## 저장소 상태
 
-GitHub `2009seungbin-stack/Saup`에는 설계 문서가 커밋됐고 `feat/commerce-foundation` 브랜치가 생성됐습니다. 이후 일괄 코드 쓰기는 도구의 보안 확인 단계에서 차단됐습니다. **이 ZIP의 구현 코드는 GitHub에 반영되지 않았습니다.** 차단을 우회하거나 원격 CI/배포가 실행됐다고 주장하지 않습니다.
+2026-09-23에 검증된 구현 소스를 GitHub `feat/commerce-foundation` 브랜치에 복원했습니다.
+
+- 원본 구현 ZIP SHA-256: `8bbe0cc864ac1e250c9c7a30655e0558ad5178670ef2e870d7c140b5a901e0ec`
+- 복원용 소스 아카이브 SHA-256: `4714da169f9b75e39e2375726b619cbccd3c31d56017f051eac0052c205899ab`
+- 복원 소스 커밋: `0ce5e4d9be41e9fd3e27c06bc4b748186864130d`
+- GitHub Actions 복원 검증: 성공
+- Python compile: 성공
+- pytest: 성공
+- `main` 브랜치에는 아직 병합하지 않았습니다.
+
+과거 전달용 ZIP은 provenance/백업 용도로만 유지합니다. 현재 개발 source of truth는 복원된 Git 브랜치입니다.
 
 ## 빠른 시작: Docker 로컬 데모
 
