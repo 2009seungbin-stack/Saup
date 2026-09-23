@@ -1,0 +1,40 @@
+{
+  "sheet": "Sheet1",
+  "header_row": 1,
+  "columns": {
+    "supplier_sku": "SKU",
+    "title": "상품명",
+    "cost": "원가",
+    "shipping": "배송비",
+    "stock": "재고"
+  },
+  "defaults": {
+    "category": "농산물",
+    "origin": "대한민국(합성 데모 데이터)",
+    "tax_type": "EXEMPT",
+    "weight_grams": 3000,
+    "grade": "합성 데모 등급",
+    "unit": "상자"
+  },
+  "sku_map": {},
+  "date_formats": [
+    "%Y-%m-%d"
+  ],
+  "order_columns": {
+    "supplier_order_id": "발주ID",
+    "marketplace_order_id": "마켓주문ID",
+    "supplier_sku": "공급사SKU",
+    "quantity": "수량",
+    "recipient": "수령인",
+    "phone": "전화번호",
+    "postal_code": "우편번호",
+    "address1": "주소",
+    "address2": "상세주소"
+  },
+  "shipment_columns": {
+    "supplier_order_id": "발주ID",
+    "marketplace_order_id": "마켓주문ID",
+    "courier": "택배사",
+    "tracking": "송장번호"
+  }
+}

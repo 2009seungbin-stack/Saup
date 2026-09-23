@@ -1,0 +1,60 @@
+# LOCAL DEMO ONLY. Real providers/payments are intentionally blocked.
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: saup
+      POSTGRES_USER: saup
+      POSTGRES_PASSWORD: local-development-only
+    volumes: [postgres_data:/var/lib/postgresql/data]
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U saup -d saup"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  redis:
+    image: redis:7-alpine
+    command: [redis-server, --appendonly, "yes"]
+    volumes: [redis_data:/data]
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  init:
+    build: {context: ., dockerfile: docker/backend.Dockerfile}
+    env_file: .env
+    command: [sh, -c, "alembic upgrade head && python -m scripts.init_db --demo"]
+    depends_on:
+      db: {condition: service_healthy}
+      redis: {condition: service_healthy}
+  api:
+    build: {context: ., dockerfile: docker/backend.Dockerfile}
+    env_file: .env
+    ports: ["127.0.0.1:8000:8000"]
+    depends_on:
+      init: {condition: service_completed_successfully}
+    restart: unless-stopped
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=2)"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+  worker:
+    build: {context: ., dockerfile: docker/backend.Dockerfile}
+    env_file: .env
+    command: [python, -m, apps.worker.main]
+    depends_on:
+      init: {condition: service_completed_successfully}
+    restart: unless-stopped
+  web:
+    build: {context: ., dockerfile: docker/web.Dockerfile}
+    environment:
+      API_INTERNAL_URL: http://api:8000
+    ports: ["127.0.0.1:3000:3000"]
+    depends_on:
+      api: {condition: service_healthy}
+    restart: unless-stopped
+volumes:
+  postgres_data:
+  redis_data:
