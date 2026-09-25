@@ -4,24 +4,40 @@ on:
     branches: [feat/phase10-supplier-operations]
     paths: [.github/workflows/phase10-lockfile-bootstrap.yml]
 permissions:
-  contents: read
+  contents: write
+  actions: read
 jobs:
   lockfile:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
         with:
-          node-version: '22'
-      - name: Resolve the existing frontend manifest
-        working-directory: apps/web
-        run: npm install --package-lock-only --ignore-scripts --no-fund
-      - name: Capture exact source
-        run: git rev-parse HEAD > source-sha.txt
-      - uses: actions/upload-artifact@v4
+          ref: feat/phase10-supplier-operations
+      - uses: actions/download-artifact@v4
         with:
           name: phase10-frontend-lockfile
+          run-id: 36120258872
+          github-token: ${{ github.token }}
+          path: .phase10-lockfile
+      - name: Verify and commit the previously generated lockfile
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo 'd1ba799cc12b095a062960a65360dea6992f24399b1af22b8df043c0b6768961  .phase10-lockfile/apps/web/package-lock.json' | sha256sum --check
+          test "$(cat .phase10-lockfile/source-sha.txt)" = '6ae16055ff619bd9a9fa7964dd8fe569d4495763'
+          cp .phase10-lockfile/apps/web/package-lock.json apps/web/package-lock.json
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add apps/web/package-lock.json
+          if ! git diff --cached --quiet; then
+            git commit -m 'build: lock frontend dependencies from verified Phase 10 artifact'
+            git push origin HEAD:feat/phase10-supplier-operations
+          fi
+          git rev-parse HEAD > source-sha.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: phase10-committed-lockfile
           path: |
             apps/web/package-lock.json
             source-sha.txt
