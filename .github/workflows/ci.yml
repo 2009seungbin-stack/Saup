@@ -1,0 +1,83 @@
+name: Phase 10 verification
+on:
+  push:
+    branches: [main, 'feat/phase10-supplier-operations']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: phase10-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  backend:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: saup_test
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: synthetic-ci-only-password
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U test_user -d saup_test"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      TEST_POSTGRES_URL: postgresql+psycopg://test_user:synthetic-ci-only-password@localhost:5432/saup_test
+      TEST_REDIS_URL: redis://localhost:6379/15
+      SOURCE_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      SOURCE_BASE_SHA: ${{ github.event.pull_request.base.sha || '' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: Install declared dependencies
+        run: python -m pip install -e '.[test]'
+      - name: Compile, unit coverage, synthetic flow, PostgreSQL and Redis gates
+        run: python -m scripts.verify_phase10 --mode backend --require-services --output reports/phase10/backend
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: phase10-backend-${{ github.run_id }}
+          path: reports/phase10/backend/
+          if-no-files-found: error
+  frontend:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      SOURCE_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - name: npm ci, TypeScript and Next.js production build
+        run: python -m scripts.verify_phase10 --mode frontend --output reports/phase10/frontend
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: phase10-frontend-${{ github.run_id }}
+          path: reports/phase10/frontend/
+          if-no-files-found: error
