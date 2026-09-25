@@ -1,0 +1,34 @@
+name: Phase 10 dependency baseline
+on:
+  push:
+    branches: [feat/phase-10-supplier-operations]
+    paths: [.github/workflows/phase10-bootstrap-lock.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  dependency-baseline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Resolve existing frontend manifest
+        working-directory: apps/web
+        run: npm install --package-lock-only --ignore-scripts --no-fund
+      - name: Record source identity
+        run: |
+          mkdir -p verification
+          git rev-parse HEAD > verification/source-sha.txt
+          node --version > verification/node-version.txt
+          npm --version > verification/npm-version.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: phase10-resolved-lockfile
+          path: |
+            apps/web/package-lock.json
+            verification/
+          if-no-files-found: error
