@@ -18,19 +18,8 @@ from .finance import reserve, release, daily_commitments, settle_payment, post
 from .catalog import pause_listing
 
 
-def transition(s, order, target, reason="RULE"):
-    validate_transition(order.state, target)
-    if order.state == target: return
-    before = order.state
-    order.state = target
-    audit(s, "ORDER_TRANSITION", order.id, old={"state": before}, new={"state": target},
-          reason=reason, correlation_id=order.correlation_id)
-
-
-def context(s, order):
-    listing = s.get(MarketplaceListing, order.listing_id)
-    sp = s.get(SupplierProduct, listing.supplier_product_id)
-    return listing, sp, s.get(Supplier, sp.supplier_id), s.get(Product, sp.product_id)
+from .order_rules import context, transition
+from .supplier_operations import SupplierOperations, supplier_transition, intervention, resolve_reviews
 
 
 class Commerce:
@@ -39,6 +28,7 @@ class Commerce:
         self.registry = registry or Registry(settings, factory)
         self.cipher = Cipher(settings.pii_encryption_key.get_secret_value())
         self.clock = clock or (lambda: datetime.now(timezone.utc))
+        self.supplier_operations = SupplierOperations(self)
 
     def ingest(self, raw: dict) -> dict:
         data = OrderInput.model_validate(raw)
@@ -116,7 +106,7 @@ class Commerce:
                 s.add(so); s.flush()
                 transition(s, order, "SUPPLIER_ORDER_PENDING")
                 if supplier.mode == "excel":
-                    so.status = "FILE_READY"
+                    self.supplier_operations.freeze_intent(s, order, so)
                     review(s, "SUPPLIER_FILE_ACK_REQUIRED", order.id)
                 else:
                     enqueue(s, "supplier.submit", so.business_key, {"supplier_order_id": so.id})
@@ -137,6 +127,9 @@ class Commerce:
         with self.factory.begin() as s:
             lock_treasury(s)
             so = s.get(SupplierOrder, supplier_order_id); order = s.get(Order, so.order_id)
+            if context(s, order)[2].mode == "excel":
+                # Excel acceptance can ONLY originate in the explicit batch command.
+                return
             if so.status in {"ACCEPTED", "CANCELLED", "FILE_READY"}: return
             if order.cancel_requested:
                 enqueue(s, "supplier.cancel", f"cancel:{so.id}", {"supplier_order_id": so.id}); return
@@ -160,31 +153,66 @@ class Commerce:
             self.prepare_payment(s, order, so)
 
     def prepare_payment(self, s, order, so):
-        if s.scalar(select(Payment).where(Payment.order_id == order.id)): return
+        lock_treasury(s)
+        existing = s.scalar(select(Payment).where(Payment.order_id == order.id))
+        if existing:
+            return existing
         _, _, supplier, _ = context(s, order)
+        batch = None
+        if supplier.mode == "excel":
+            try:
+                batch = self.supplier_operations.validate_payable(s, order, so)
+            except (DomainError, ValidationError) as exc:
+                code = getattr(exc, "code", "ADDRESS_ERROR")
+                self.hold(s, order, code)
+                supplier_transition(s, so, "MANUAL_REVIEW", reason=code)
+                review(s, "SUPPLIER_PAYMENT_PREPARATION_BLOCKED", so.id, {"code": code})
+                return None
         if not supplier.destination_approved or not supplier.destination_fingerprint:
-            self.hold(s, order, "DESTINATION_NOT_WHITELISTED"); return
-        status = "PENDING"
+            self.hold(s, order, "DESTINATION_NOT_WHITELISTED")
+            return None
+        status = "EVIDENCE_PENDING" if batch and batch.payment_path == "MANUAL_EVIDENCE" else "PENDING"
         if so.amount > self.settings.auto_payment_limit or daily_commitments(s, at=self.clock()) + so.amount > self.settings.daily_payment_limit:
             status = "MANUAL_APPROVAL"
         p = Payment(order_id=order.id, supplier_order_id=so.id, business_key=f"payment:{order.id}",
                     amount=so.amount, destination_fingerprint=supplier.destination_fingerprint, status=status)
         s.add(p); s.flush()
-        if status == "MANUAL_APPROVAL": review(s, "PAYMENT_APPROVAL", p.id, {"amount": p.amount})
-        else: enqueue(s, "payment.execute", p.business_key, {"payment_id": p.id})
+        if batch:
+            supplier_transition(s, so, "PAYMENT_PENDING")
+            audit(s, "SUPPLIER_PAYMENT_PREPARED", p.id,
+                new={"supplier_order_id": so.id, "amount": so.amount, "payment_path": batch.payment_path})
+        if status == "MANUAL_APPROVAL":
+            review(s, "PAYMENT_APPROVAL", p.id, {"amount": p.amount})
+        elif status == "PENDING":
+            enqueue(s, "payment.execute", p.business_key, {"payment_id": p.id})
+        return p
 
     def approve_payment(self, payment_id, amount, destination_fingerprint, actor):
         with self.factory.begin() as s:
             lock_treasury(s); p = s.get(Payment, payment_id)
             if p is None: raise DomainError("PAYMENT_NOT_FOUND", 404)
+            if p.amount != amount or p.destination_fingerprint != destination_fingerprint:
+                raise DomainError("APPROVAL_SNAPSHOT_MISMATCH")
+            if p.approved_by and p.status in {"PENDING", "EVIDENCE_PENDING", "SENDING", "UNKNOWN", "SUCCEEDED"}:
+                return
             if p.status != "MANUAL_APPROVAL": raise DomainError("PAYMENT_NOT_AWAITING_APPROVAL")
-            if p.amount != amount or p.destination_fingerprint != destination_fingerprint: raise DomainError("APPROVAL_SNAPSHOT_MISMATCH")
             order = s.get(Order, p.order_id)
             if order.cancel_requested: raise DomainError("CANCEL_REQUESTED")
-            p.approved_by, p.approved_at, p.status = actor, self.clock(), "PENDING"
-            order.human_interventions += 1
+            if daily_commitments(s, p.id, self.clock()) + p.amount > self.settings.daily_payment_limit:
+                raise DomainError("DAILY_PAYMENT_LIMIT")
+            batch = None
+            so = s.get(SupplierOrder, p.supplier_order_id)
+            supplier = context(s, order)[2]
+            if supplier.mode == "excel":
+                batch = self.supplier_operations.validate_payable(s, order, so)
+            p.approved_by, p.approved_at = actor, self.clock()
+            p.status = "EVIDENCE_PENDING" if batch and batch.payment_path == "MANUAL_EVIDENCE" else "PENDING"
+            intervention(s, "PAYMENT_APPROVED_MANUALLY", f"payment-approved:{p.id}", actor, self.clock(),
+                order=order, batch_id=batch.id if batch else None, supplier_id=supplier.id)
             audit(s, "PAYMENT_APPROVED", p.id, actor=actor, new={"amount": p.amount}, correlation_id=order.correlation_id)
-            enqueue(s, "payment.execute", p.business_key, {"payment_id": p.id})
+            resolve_reviews(s, p.id, ["PAYMENT_APPROVAL"], actor, self.clock(), "PAYMENT_APPROVED")
+            if p.status == "PENDING":
+                enqueue(s, "payment.execute", p.business_key, {"payment_id": p.id})
 
     def execute_payment(self, payment_id):
         with self.factory() as s:
@@ -194,7 +222,7 @@ class Commerce:
             self.cancel(order.id, actor="marketplace"); return
         with self.factory.begin() as s:
             lock_treasury(s); p = s.get(Payment, payment_id); order = s.get(Order, p.order_id)
-            if p.status in {"SUCCEEDED", "CANCELLED", "MANUAL_APPROVAL", "UNKNOWN"}: return
+            if p.status in {"SUCCEEDED", "CANCELLED", "MANUAL_APPROVAL", "EVIDENCE_PENDING", "UNKNOWN"}: return
             if p.status == "SENDING":
                 p.status = "UNKNOWN"; review(s, "PAYMENT_RESULT_UNKNOWN", p.id); return
             if p.status != "PENDING": raise DomainError("PAYMENT_NOT_DISPATCHABLE")
@@ -205,9 +233,13 @@ class Commerce:
                 if not supplier.destination_approved or supplier.destination_fingerprint != p.destination_fingerprint:
                     raise DomainError("DESTINATION_CHANGED")
                 if order.state != "SUPPLIER_ORDERED": raise DomainError("ORDER_NOT_PAYABLE")
+                if supplier.mode == "excel":
+                    batch = self.supplier_operations.validate_payable(s, order, s.get(SupplierOrder, p.supplier_order_id))
+                    if batch.payment_path != "DEMO_PROVIDER" or self.settings.app_mode not in {"test", "demo"}:
+                        raise DomainError("MANUAL_PAYMENT_CANNOT_DISPATCH")
             except (DomainError, ValidationError) as exc:
                 p.status = "MANUAL_APPROVAL"; self.hold(s, order, getattr(exc, "code", "ADDRESS_ERROR")); return
-            if not p.approved_by and daily_commitments(s, p.id, self.clock()) + p.amount > self.settings.daily_payment_limit:
+            if daily_commitments(s, p.id, self.clock()) + p.amount > self.settings.daily_payment_limit:
                 p.status = "MANUAL_APPROVAL"; review(s, "PAYMENT_APPROVAL", p.id, {"amount": p.amount}); return
             p.status, p.dispatched_at = "SENDING", self.clock()
             key = p.business_key
@@ -225,7 +257,16 @@ class Commerce:
         with self.factory.begin() as s:
             lock_treasury(s); p = s.get(Payment, payment_id); order = s.get(Order, p.order_id)
             if p.status == "SUCCEEDED": return
+            if p.status not in {"SENDING", "UNKNOWN"}:
+                raise DomainError("PAYMENT_NOT_PROVIDER_CONFIRMABLE")
+            item = self.supplier_operations.active_item(s, p.supplier_order_id)
+            if item:
+                from packages.infrastructure.models import SupplierOrderBatch
+                batch = s.get(SupplierOrderBatch, item.batch_id)
+                if batch.payment_path != "DEMO_PROVIDER":
+                    raise DomainError("MANUAL_PAYMENT_CANNOT_USE_PROVIDER_RECEIPT")
             settle_payment(s, p, reference)
+            self.supplier_operations.payment_completed(s, p)
             if order.cancel_requested:
                 review(s, "CANCELLATION_AFTER_PAYMENT", order.id)
             else:
@@ -248,6 +289,10 @@ class Commerce:
             lock_treasury(s); order = s.get(Order, order_id)
             if order is None: raise DomainError("ORDER_NOT_FOUND", 404)
             if order.state == "CANCELLED" or order.cancel_requested: return
+            so = s.scalar(select(SupplierOrder).where(SupplierOrder.order_id == order_id))
+            if so and context(s, order)[2].mode == "excel":
+                self.supplier_operations.request_cancellation_in_session(s, so, actor)
+                return
             order.cancel_requested = True
             if actor != "marketplace": order.human_interventions += 1
             audit(s, "CANCELLATION_REQUESTED", order.id, actor=actor, correlation_id=order.correlation_id)
@@ -272,6 +317,11 @@ class Commerce:
             so = s.get(SupplierOrder, supplier_order_id); order = s.get(Order, so.order_id)
             _, _, supplier, _ = context(s, order)
             payload, mode = {"supplier_order_key": so.business_key}, supplier.mode
+        if mode == "excel":
+            with self.factory.begin() as s:
+                lock_treasury(s)
+                self.supplier_operations.request_cancellation_in_session(s, s.get(SupplierOrder, supplier_order_id), "system")
+            return
         receipt = self.registry.supplier(mode).cancel_order(payload, f"cancel:{supplier_order_id}")
         with self.factory.begin() as s:
             lock_treasury(s); so = s.get(SupplierOrder, supplier_order_id); order = s.get(Order, so.order_id)
@@ -283,6 +333,7 @@ class Commerce:
             audit(s, "SUPPLIER_CANCELLATION_CONFIRMED", order.id, correlation_id=order.correlation_id)
 
     def add_shipment(self, s, raw, supplier_id=None):
+        lock_treasury(s)
         row = ShipmentRow.model_validate(raw)
         so = s.get(SupplierOrder, row.supplier_order_id)
         if so is None: raise DomainError("SUPPLIER_ORDER_NOT_FOUND")
@@ -296,6 +347,13 @@ class Commerce:
         if s.scalar(select(Shipment).where(Shipment.courier == row.courier, Shipment.tracking == row.tracking)):
             raise DomainError("DUPLICATE_TRACKING")
         if order.state != "SHIPMENT_PENDING" or order.cancel_requested: raise DomainError("ORDER_NOT_SHIPPABLE")
+        if context(s, order)[2].mode == "excel":
+            item = self.supplier_operations.active_item(s, so.id)
+            payment = s.scalar(select(Payment).where(Payment.supplier_order_id == so.id))
+            if (so.status != "SHIPMENT_PENDING" or item is None or item.ack_status != "ACCEPTED" or
+                    payment is None or payment.status != "SUCCEEDED"):
+                raise DomainError("SUPPLIER_ORDER_NOT_SHIPPABLE")
+            supplier_transition(s, so, "SHIPPED")
         shipment = Shipment(order_id=order.id, courier=row.courier, tracking=row.tracking)
         s.add(shipment); s.flush(); transition(s, order, "SHIPPED")
         enqueue(s, "marketplace.shipment", f"shipment:{shipment.id}", {"shipment_id": shipment.id})

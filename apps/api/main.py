@@ -56,9 +56,6 @@ class BodyLimit:
 
 class Input(BaseModel):
     model_config=ConfigDict(extra='forbid')
-class Login(Input):
-    username:str=Field(min_length=1,max_length=80)
-    password:str=Field(min_length=1,max_length=128)
 class Approval(Input):
     amount:StrictInt=Field(gt=0,le=10**12)
     destination_fingerprint:str=Field(pattern=r'^[a-f0-9]{64}$')
@@ -143,30 +140,12 @@ def create_app(settings=None, factory=None):
         LOG.info(json.dumps({'event':'http_request','correlation_id':correlation,'method':request.method,'status':response.status_code}))
         return response
 
-    def origin(request):
-        if request.headers.get('origin') != settings.public_origin: raise DomainError('ORIGIN_REJECTED',403)
+    from .routers.auth import create_auth_router
+    from .routers.supplier_operations import create_supplier_operations_router
+    auth_router, identity, viewer, operator, admin = create_auth_router(settings, factory, limiter)
+    app.include_router(auth_router)
+    app.include_router(create_supplier_operations_router(c.supplier_operations, viewer, operator, admin))
 
-    def identity(request:Request):
-        token=request.cookies.get('saup_session','')
-        if not token: raise DomainError('AUTHENTICATION_REQUIRED',401)
-        limiter.hit('session:'+digest(token),180)
-        with factory() as s:
-            session=s.scalar(select(AuthSession).where(AuthSession.token_hash==digest(token)))
-            if session is None or aware(session.expires_at)<=datetime.now(timezone.utc): raise DomainError('SESSION_EXPIRED',401)
-            user=s.get(User,session.user_id)
-            if not user or not user.active: raise DomainError('USER_DISABLED',403)
-            if request.method not in {'GET','HEAD','OPTIONS'}:
-                origin(request)
-                if not hmac.compare_digest(session.csrf_hash,digest(request.headers.get('x-csrf-token',''))):
-                    raise DomainError('CSRF_REJECTED',403)
-            return {'id':user.id,'username':user.username,'role':user.role,'session_id':session.id}
-
-    def role(*allowed):
-        def guard(user=Depends(identity)):
-            if user['role'] not in allowed: raise DomainError('ROLE_FORBIDDEN',403)
-            return user
-        return guard
-    viewer=role('admin','operator','viewer');operator=role('admin','operator');admin=role('admin')
     def demo_only():
         if settings.app_mode not in {'demo','test'}: raise DomainError('DEMO_DISABLED',403)
 
@@ -185,35 +164,6 @@ def create_app(settings=None, factory=None):
             status=worker_ready and redis_ready
             return JSONResponse({'database':True,'worker':worker_ready,'redis':redis_ready,'ready':status},200 if status else 503)
         except Exception: return JSONResponse({'ready':False,'error':'DEPENDENCY_UNAVAILABLE'},503)
-
-    @app.post('/auth/login')
-    def login(data:Login,request:Request):
-        origin(request);limiter.hit('login:'+(request.client.host if request.client else 'unknown'),10,60)
-        with factory.begin() as s:
-            user=s.scalar(select(User).where(User.username==data.username))
-            valid=verify_password(data.password,user.password_hash if user else 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA')
-            if not user or not user.active or not valid: raise DomainError('INVALID_CREDENTIALS',401)
-            token,csrf=secrets.token_urlsafe(32),secrets.token_urlsafe(32)
-            s.add(AuthSession(user_id=user.id,token_hash=digest(token),csrf_hash=digest(csrf),
-                expires_at=datetime.now(timezone.utc)+timedelta(seconds=settings.session_ttl_seconds)))
-            audit(s,'ADMIN_LOGIN',user.id,actor=user.username)
-            response=JSONResponse({'user':user.username,'role':user.role,'csrf_token':csrf,'mode':settings.app_mode})
-            response.set_cookie('saup_session',token,max_age=settings.session_ttl_seconds,httponly=True,
-                secure=settings.app_mode=='production',samesite='strict',path='/')
-            response.set_cookie('saup_csrf',csrf,max_age=settings.session_ttl_seconds,httponly=False,
-                secure=settings.app_mode=='production',samesite='strict',path='/')
-            return response
-
-    @app.post('/auth/logout')
-    def logout(user=Depends(viewer)):
-        with factory.begin() as s:
-            row=s.get(AuthSession,user['session_id'])
-            if row:s.delete(row)
-        response=JSONResponse({'status':'signed_out'});response.delete_cookie('saup_session');response.delete_cookie('saup_csrf')
-        return response
-
-    @app.get('/auth/me')
-    def me(user=Depends(viewer)): return {'username':user['username'],'role':user['role'],'mode':settings.app_mode}
 
     @app.get('/v1/integrations')
     def integrations(user=Depends(viewer)): return c.registry.statuses()
@@ -280,18 +230,18 @@ def create_app(settings=None, factory=None):
 
     @app.get('/v1/reviews')
     def reviews(user=Depends(viewer)):
-        with factory() as s:return [safe_row(x,'id category entity_id details status created_at') for x in s.scalars(select(Review).order_by(Review.created_at.desc()).limit(200))]
+        with factory() as s:return [safe_row(x,'id category entity_id details status resolution_code resolved_by resolved_at created_at') for x in s.scalars(select(Review).order_by(Review.created_at.desc()).limit(200))]
 
     @app.post('/v1/reviews/{review_id}/acknowledge')
     def acknowledge_review(review_id:str,data:ReviewAck,user=Depends(operator)):
         with factory.begin() as s:
             lock_treasury(s);row=s.get(Review,review_id)
             if row is None:raise DomainError('REVIEW_NOT_FOUND',404)
-            if row.status!='ACKNOWLEDGED':
+            if row.status=='OPEN':
                 row.status='ACKNOWLEDGED'
                 # Acknowledging is not resolving or approving a money/order action.
                 audit(s,'REVIEW_ACKNOWLEDGED',row.id,actor=user['username'],new={'reason_hash':digest(data.reason)})
-            return {'status':'ACKNOWLEDGED','business_state_changed':False}
+            return {'status':row.status,'business_state_changed':False}
 
     @app.get('/v1/payments')
     def payments(user=Depends(operator)):
@@ -406,11 +356,11 @@ def create_app(settings=None, factory=None):
 
     @app.post('/demo/claims/{claim_id}/supplier-response')
     def demo_response(claim_id:str,data:SupplierResponse,user=Depends(operator)):
-        demo_only();after.supplier_response(claim_id,data.amount,data.accepted);return {'status':'RECORDED'}
+        demo_only();after.supplier_response(claim_id,data.amount,data.accepted,actor=user['username']);return {'status':'RECORDED'}
 
     @app.post('/demo/claims/{claim_id}/supplier-recovery')
     def demo_recovery(claim_id:str,data:Receipt,user=Depends(admin)):
-        demo_only();after.confirm_supplier_recovery(claim_id,data.amount,data.receipt_id);return {'status':'RECORDED'}
+        demo_only();after.confirm_supplier_recovery(claim_id,data.amount,data.receipt_id,actor=user['username']);return {'status':'RECORDED'}
 
     @app.post('/demo/claims/{claim_id}/refund')
     def demo_refund(claim_id:str,data:RefundInput,user=Depends(admin)):
@@ -418,9 +368,9 @@ def create_app(settings=None, factory=None):
 
     @app.post('/demo/orders/{order_id}/settlement')
     def demo_settlement(order_id:str,data:SettlementInput,user=Depends(operator)):
-        demo_only();return {'settlement_id':after.reconcile_settlement(order_id,data.external_id,data.actual,data.adjustment)}
+        demo_only();return {'settlement_id':after.reconcile_settlement(order_id,data.external_id,data.actual,data.adjustment,actor=user['username'])}
 
     @app.post('/demo/settlements/{settlement_id}/confirm')
     def demo_confirm(settlement_id:str,data:Receipt,user=Depends(admin)):
-        demo_only();after.confirm_settlement_cash(settlement_id,data.receipt_id);return {'status':'CONFIRMED'}
+        demo_only();after.confirm_settlement_cash(settlement_id,data.receipt_id,actor=user['username']);return {'status':'CONFIRMED'}
     return app

@@ -1,5 +1,5 @@
 from sqlalchemy.orm import DeclarativeBase
-from . import schema_v1 as schema
+from . import schema_v2 as schema
 
 class Base(DeclarativeBase):
     metadata = schema.metadata
@@ -32,3 +32,12 @@ class SupplierExcelProfile(Base): __table__ = schema.profiles
 class ImportBatch(Base): __table__ = schema.imports
 class ExternalRecord(Base): __table__ = schema.external_records
 class Experiment(Base): __table__ = schema.experiments
+
+class SupplierOrderIntent(Base): __table__ = schema.supplier_intents
+class SupplierOrderBatch(Base): __table__ = schema.supplier_batches
+class SupplierOrderBatchItem(Base): __table__ = schema.supplier_batch_items
+class SupplierBatchAcknowledgement(Base): __table__ = schema.supplier_acknowledgements
+class SupplierPaymentEvidence(Base): __table__ = schema.supplier_payment_evidence
+class SupplierPaymentConfirmation(Base): __table__ = schema.supplier_payment_confirmations
+class SupplierCancellation(Base): __table__ = schema.supplier_cancellations
+class OperationalIntervention(Base): __table__ = schema.operational_interventions

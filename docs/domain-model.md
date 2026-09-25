@@ -25,3 +25,14 @@ There is at most one `SupplierOrder`, `Payment`, cash `Reservation` and `Shipmen
 `Job` is the transactional outbox/durable queue; `Command` provides a reusable payload-bound command key primitive. `ExternalRecord` stores simulated provider receipts in separate transactions. `ImportBatch` retains encrypted upload content, content hash, profile snapshot/version and counters. `Review` is the unified exception queue; acknowledgment is not a business resolution. `AuditEvent` is append-only.
 
 `User` and hashed `AuthSession` implement local RBAC. `Heartbeat` tracks worker readiness. `Experiment` stores explicit sample/window/method and manual input metrics. No AI financial decisions or unsupported consumer quality claims are produced.
+
+
+## Phase 10 additions (runtime: 36 tables; initial snapshot: 28)
+
+`SupplierOrderIntent` is append-only and freezes supplier/economics/SKU/quantity/address hash/destination hash; it does not store plaintext PII. `SupplierOrderBatch` freezes profile version/mapping and an encrypted XLSX plus SHA-256, generation/export/send/ack timestamps and actors. `SupplierOrderBatchItem` joins supplier orders through same-supplier composite FKs and a partial unique active membership index; historical invalidated memberships remain relational.
+
+`SupplierBatchAcknowledgement` is an immutable complete response bound to a payload hash. Items separately retain accepted/rejected/changed-term decisions. `SupplierPaymentEvidence` is immutable exact allocation/destination/reference/hash evidence, unique per payment and supplier receipt reference. `SupplierPaymentConfirmation` is a separate immutable admin attestation, unique per evidence/payment. Neither is a live payment connector. `SupplierCancellation` records request, origin state, confirmation reference/hash and financial-review state. `OperationalIntervention` is immutable, unique by business key and categorized for future measurement.
+
+Review now supports OPEN/ACKNOWLEDGED/RESOLVED plus resolution_code/resolved_by/resolved_at. Typed commands resolve only their satisfied issue; audit history preserves reopening and previous resolution. Acknowledgement remains "seen", not business resolution. The global treasury lock is acquired before supplier/order/payment changes; database unique constraints prevent duplicate memberships, payments, receipts, confirmations, shipments and jobs.
+
+Migration 0002 never edits frozen schema_v1 or 0001. Existing Excel supplier orders are explicitly held for legacy review; populated downgrade is blocked. See supplier-excel/payment-safety for recovery and privacy behavior.

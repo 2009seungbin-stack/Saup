@@ -51,9 +51,17 @@ def test_supplier_cutoff_enforced(env,order_input):
 def test_excel_export_is_not_supplier_acceptance(env,order_input):
     with env['factory'].begin() as s:s.get(Supplier,env['ids']['supplier_id']).mode='excel'
     oid=env['commerce'].ingest(order_input)['id'];env['worker'].drain()
-    data=Files(env['commerce']).export(env['ids']['profile_id'],'admin');assert data[:2]==b'PK'
+    from packages.domain.supplier_operations import Actor
+    from packages.domain.errors import DomainError
+    with pytest.raises(DomainError, match="SUPPLIER_BATCH_REQUIRED"):
+        Files(env['commerce']).export(env['ids']['profile_id'], 'admin')
+    with env['factory']() as s: so_id=s.scalar(select(SupplierOrder.id))
+    ops=env['commerce'].supplier_operations
+    batch=ops.create_batch({"supplier_id":env['ids']['supplier_id'], "profile_id":env['ids']['profile_id'],
+        "supplier_order_ids":[so_id], "idempotency_key":"export-invariant"}, Actor("admin", "admin"))
+    data,_=ops.export_batch(batch['id'],Actor("admin", "admin"));assert data[:2]==b'PK' 
     with env['factory']() as s:
-        assert s.scalar(select(SupplierOrder)).status=='FILE_READY'
+        assert s.scalar(select(SupplierOrder)).status=='EXPORTED'
         assert s.get(Order,oid).state=='SUPPLIER_ORDER_PENDING'
         assert not s.scalar(select(Payment))
 

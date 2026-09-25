@@ -1,29 +1,45 @@
-# Supplier Excel integration
+# Supplier Excel operations · Phase 10
 
-## Profiles
+PostgreSQL is authoritative. Files, messages and operator statements are external inputs; none silently advances acceptance or moves money.
 
-`SupplierExcelProfile` stores supplier identity, version and JSON mapping. The mapping contains sheet/header row, price columns, explicit defaults, SKU map, order columns and shipment columns. Imports capture the exact profile snapshot/version, so editing a profile cannot reinterpret an existing upload. Current profile API creates new profiles; an audited profile-version update UI is not implemented.
+## Profiles and imports
 
-`fixtures/supplier-profile.json` and `fixtures/prices.xlsx` are synthetic examples. Price identifiers are text, including leading zeroes. Do not let Excel convert SKU, order IDs or tracking numbers into numeric cells; such cells are rejected because lost zeroes cannot safely be inferred.
+`SupplierExcelProfile` retains supplier, version and deterministic mapping. Price and tracking imports retain their original profile/version snapshots and existing duplicate/formula/quarantine behavior. Identifiers remain text; lost leading zeroes are not guessed. Address validation never rewrites the original address. The sample fixture profile is synthetic, not approval of a real supplier format.
 
-`date_formats` is reserved profile metadata; current normalized price/shipment schemas do not contain free-form date columns, so generalized supplier date/template transformation is not implemented. Export supports supplier-specific headers/order, not arbitrary preservation of complex styled vendor templates.
+## Batch creation and export
 
-## Import safety and workflow
+`SupplierOrder` PENDING plus `SupplierOrderIntent` holds validated/reserved frozen economics, quantity, SKU and original-address hash. One `SupplierOrderBatch` contains one supplier/profile/version, 1–500 eligible orders, deterministic sorted membership and an encrypted frozen XLSX payload. Relational items have composite supplier FKs and a partial unique index on active supplier-order membership. A payload-bound idempotency key is required for creation.
 
-An authenticated upload records encrypted XLSX bytes and a content hash, then enqueues work. HTTP does not run the spreadsheet normalization job. The worker validates archive limits, sheet/headers/row counts and individual fields before database mutation.
+Creation produces FILE_READY; download sets EXPORTED once and audits every PII access. Workbook text cells preserve leading zeroes and neutralize formula interpretation. Repeated download returns exactly the same bytes and SHA-256 even after a profile is edited. Plaintext files are not written to persistent application storage. General JSON responses contain neither address/phone nor ciphertext.
 
-Hard limits are 5 MB input, 25 MB expanded ZIP, 150 ZIP members, 5,000 data rows and 64 columns. Formulas, macros, external links, encrypted ZIP members, duplicate headers, invalid numeric values and numeric identifiers are rejected. Conventional comma-separated integer prices are supported; NaN, infinity, fractional won and negative values are not.
+The legacy profile-wide Excel-mode exporter now returns `SUPPLIER_BATCH_REQUIRED`: create and export a batch instead. The demo-mode legacy exporter remains for existing demonstrations. This intentional compatibility change avoids an unauditable second supplier handoff path.
 
-All same-file duplicate price SKUs are quarantined. Duplicate supplier-order or tracking identities in shipment files are quarantined. Good rows can commit while bad rows create `SUPPLIER_FILE_ERROR` entries with batch/row/error code, never copied customer data. Row writes use savepoints. A repeated profile/version/kind/content hash returns the existing batch.
+## Delivery and acknowledgement
 
-Catalog normalization preserves price history only when price changes. Unknown/new critical product metadata must be reviewed. Inventory refresh conservatively subtracts unresolved commitments. Restoring a cancelled reservation into a newer stock snapshot is prohibited.
+`mark-sent` requires channel, bounded reference and the generated file hash. FILE_READY or EXPORTED can become SENT; downloading is not required to claim a false delivery. The operator must actually have delivered the file. Same metadata replay is idempotent; conflicting metadata is rejected.
 
-## Supplier order export
+A single final acknowledgement classifies **every batch member exactly once** as accepted or rejected. Mixed line outcomes are supported; incremental incomplete response fragments are deliberately rejected rather than guessed. The reference and immutable payload hash bind replay. Unknown/cross-batch/duplicate IDs fail. Reasons are typed: OUT_OF_STOCK, PRICE_CHANGED, SKU_NOT_FOUND, ORDER_NOT_ACCEPTED, DELIVERY_UNAVAILABLE, CUTOFF_EXCEEDED, OTHER.
 
-The export uses exact decrypted original marketplace address and validates it without modifying it. Cells are explicitly text where appropriate, protecting leading zeroes and strings beginning with formula characters. Export is a privileged, audited PII action with no-store response headers.
+Reported price/shipping/quantity/SKU/destination changes never overwrite the intent. Changed lines enter MANUAL_REVIEW and cannot pay. Relevant stock/SKU/terms failures pause internal listing intent with UNCONFIRMED remote status. Accepted same-SKU lines are rechecked after all decisions, so a relevant risk pause can block their payment too. Rejected lines do not pay and do not assume inventory is restocked.
 
-**FILE_READY is not ACCEPTED.** A supplier in Excel mode remains waiting for manual/provider acknowledgement. This release does not include a complete manual acknowledgement/payment-proof workflow. The end-to-end demo uses the explicit simulated supplier; the exporter remains useful for real file-format validation but is not claimed production-complete.
+## Payment and tracking
 
-## Shipment import
+Batch policy is MANUAL_EVIDENCE or explicitly test/demo-only DEMO_PROVIDER. Accepted lines reuse existing validation, reservation, destination and limits. Manual evidence records exact payment/supplier/amount/bank-deposit allocation/destination/reference/hash. Separate admin confirmation, explicit money-moved attestation and a full recheck are required before accounting payment success. Evidence alone never pays. UNKNOWN cannot be converted into a manual retry.
 
-A row must identify the internal supplier-order ID and matching marketplace-order ID, courier and text tracking number. It must belong to the profile's supplier. Only a paid shipment-pending line without cancellation may ship. A repeated identical tracking operation is idempotent; conflicting tracking requires review. No split shipments are supported yet.
+Tracking XLSX can create shipment only for an accepted, paid, SHIPMENT_PENDING supplier order and an eligible noncancelled marketplace order. Creation updates the supplier state to SHIPPED and enqueues exactly one existing marketplace shipment update. Existing duplicate/conflicting tracking protections remain.
+
+## Cancellation and recovery
+
+Before batch: local cancellation releases reservation. Before send: invalidate the complete frozen file, retain historical membership and re-batch surviving orders; never silently rewrite a downloaded file. After send/acceptance: record CANCEL_PENDING and require explicit supplier cancellation. Money exposed by evidence, UNKNOWN/SENDING or success remains reserved/spent pending financial review, including after supplier cancellation is confirmed.
+
+`revalidate` is admin-only original-term revalidation; it cannot change economics, revive cancelled orders, override unrelated risk pauses or clear UNKNOWN. `adopt-verified-unsent` is admin-only migration recovery with explicit verified-never-sent evidence and no payment/cancellation history. Legacy FILE_READY is not proof of being unsent.
+
+## APIs and UI
+
+Supplier batch POST/list/detail/file/mark-sent/acknowledge/cancel/resolve; order cancel/cancellation-confirm/revalidate/adopt; payment detail/evidence/evidence-confirm; metrics and sanitized audit trail. Exact schemas are in `apps/api/routers/supplier_operations.py`. Viewer reads state, operator handles files/handoffs/evidence, admin confirms payment and sensitive recovery. CSRF/origin checks apply through the existing identity dependency. Console code is split under `apps/web/components/suppliers/`.
+
+## Measurement and remaining limits
+
+Operational intervention events are deduplicated by business key, retain actor/time/category and optionally order/batch/supplier. They include manual send/ack/payment approval/evidence, cancellation/review recovery and manual claims/settlements. No production automation percentage is emitted. Legacy transactions with no recorded interventions are not proof of automation.
+
+Actual delivery transport remains manual; this phase does not send email or manipulate supplier portals. Real profile validation, secure evidence object storage, file retention, financial corrections/refund reconciliation and full browser/Docker validation remain explicit production work.

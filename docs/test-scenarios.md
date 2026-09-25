@@ -26,3 +26,16 @@ The source requirement's twenty scenarios map to actual tests, not claimed live-
 | Failed marketplace price update | `test_price_sync_timeout_fails_closed_but_remote_unconfirmed` (simulated listing-sync fault) |
 
 Additional tests cover roles/session/CSRF/origin/rate limits/redaction, formula/ZIP/header/text-ID rules, payload conflicts, money bounds, balanced ledgers, stale inventory, changed destinations, safe replay, supplier deposit isolation, claim sample windows, audits, provider configuration and discovery/probe API. Consult actual output for latest count; infrastructure skips are not included in the passed count.
+
+
+## Phase 10 scenario suite
+
+`test_supplier_operations.py`: batch eligibility/membership/idempotency, frozen profile/file/PII audit/text/formula safety, explicit send, complete/mixed/rejected/conflicting acknowledgement, changed terms, payment/evidence/admin limits/deposit safety, shipment gating/duplicates, before/after-send/ack/payment cancellation, required audits and intervention counts.
+
+`test_supplier_api_security.py`: viewer mutation denials, operator admin-confirmation denial, CSRF/origin, privileged file download, no PII/ciphertext in lists, review acknowledgement distinct from resolution.
+
+`test_supplier_recovery.py`: original-economics recovery, unrelated-risk pause protection, UNKNOWN payment behavior, conflicting/reused evidence, superseded batch cancellation, illegal transitions, immutable records, migration round-trip/legacy adoption/nonempty downgrade guard, manual settlement categories.
+
+`test_supplier_postgres.py` (real service required): concurrent identical acknowledgement creates one payment; concurrent evidence and admin confirmation create one receipt/confirmation/journal; concurrent duplicate tracking creates one shipment/job; append-only DB triggers; competing incompatible acknowledgements have one winner and a deterministic conflict. Existing PostgreSQL test now migrates through 0002. Redis tests include distributed sharing and fail-closed unavailable connection.
+
+`scripts/demo_supplier_operations.py` uses temporary synthetic SQLite databases and both payment policies, with accepted/rejected lines and repeated commands, tracking import and mock marketplace update. No browser, Docker or live provider execution is implied. `scripts/verify_phase10.py` records exact checks/source hashes/coverage/logs and fails configured infrastructure gates on skip. See phase10-verification.md for executed results.

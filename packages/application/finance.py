@@ -113,7 +113,7 @@ def reserve(s, settings, order, supplier_product, amount: int):
     return row
 
 
-def release(s, order):
+def release(s, order, *, restore_inventory=True):
     row = s.scalar(select(Reservation).where(Reservation.order_id == order.id))
     if row is None or row.status == "RELEASED":
         return
@@ -122,7 +122,7 @@ def release(s, order):
     listing = s.get(MarketplaceListing, order.listing_id)
     sp = s.get(SupplierProduct, listing.supplier_product_id)
     # Do not restore stock into a newer supplier snapshot; that could double-count.
-    if sp.stock is not None and aware(sp.last_inventory_at) == aware(row.inventory_snapshot_at):
+    if restore_inventory and sp.stock is not None and aware(sp.last_inventory_at) == aware(row.inventory_snapshot_at):
         sp.stock += order.quantity
         sp.stock_status = "AVAILABLE" if sp.stock > 5 else "LOW"
     row.status = "RELEASED"
@@ -133,14 +133,14 @@ def daily_commitments(s, exclude_id=None, at=None) -> int:
     at = at or datetime.now(timezone.utc)
     local = at.astimezone(ZoneInfo("Asia/Seoul"))
     start = datetime.combine(local.date(), time.min, ZoneInfo("Asia/Seoul")).astimezone(timezone.utc)
-    query = select(func.coalesce(func.sum(Payment.amount), 0)).where(or_(Payment.status.in_(["PENDING", "SENDING", "UNKNOWN"]),
+    query = select(func.coalesce(func.sum(Payment.amount), 0)).where(or_(Payment.status.in_(["PENDING", "EVIDENCE_PENDING", "SENDING", "UNKNOWN"]),
         (Payment.status == "SUCCEEDED") & (Payment.dispatched_at >= start)))
     if exclude_id:
         query = query.where(Payment.id != exclude_id)
     return s.scalar(query)
 
 
-def settle_payment(s, payment, provider_reference: str):
+def settle_payment(s, payment, provider_reference: str, *, source="DEMO_PROVIDER"):
     if payment.status == "SUCCEEDED":
         return
     order = s.get(Order, payment.order_id)
@@ -149,10 +149,12 @@ def settle_payment(s, payment, provider_reference: str):
         raise DomainError("PAYMENT_WITHOUT_RESERVATION")
     if reservation.bank_amount + reservation.deposit_amount != payment.amount:
         raise DomainError("PAYMENT_RESERVATION_MISMATCH")
+    if balance(s, "BANK") < reservation.bank_amount or balance(s, f"DEPOSIT:{reservation.supplier_id}") < reservation.deposit_amount:
+        raise DomainError("PAYMENT_WOULD_OVERDRAW_ACCOUNT")
     entries = {"SUPPLIER_EXPENSE": payment.amount, "BANK": -reservation.bank_amount,
                f"DEPOSIT:{reservation.supplier_id}": -reservation.deposit_amount}
     post(s, f"supplier-payment:{payment.id}", "SUPPLIER_PAYMENT", entries, order.id, order.correlation_id)
     reservation.status = "SPENT"
     payment.status = "SUCCEEDED"
     payment.provider_reference = provider_reference
-    audit(s, "SUPPLIER_PAYMENT_CREATED", order.id, new={"amount": payment.amount, "demo": True}, correlation_id=order.correlation_id)
+    audit(s, "SUPPLIER_PAYMENT_CREATED", order.id, new={"amount": payment.amount, "demo": source == "DEMO_PROVIDER", "source": source}, correlation_id=order.correlation_id)
