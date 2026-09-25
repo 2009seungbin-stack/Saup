@@ -1,0 +1,28 @@
+name: Phase 10 lockfile bootstrap
+on:
+  push:
+    branches: [feat/phase10-supplier-operations]
+    paths: [.github/workflows/phase10-lockfile-bootstrap.yml]
+permissions:
+  contents: read
+jobs:
+  lockfile:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Resolve the existing frontend manifest
+        working-directory: apps/web
+        run: npm install --package-lock-only --ignore-scripts --no-fund
+      - name: Capture exact source
+        run: git rev-parse HEAD > source-sha.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: phase10-frontend-lockfile
+          path: |
+            apps/web/package-lock.json
+            source-sha.txt
+          if-no-files-found: error
