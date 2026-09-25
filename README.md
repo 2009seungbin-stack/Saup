@@ -8,7 +8,7 @@ Python 3.12+, FastAPI, SQLAlchemy 2, Alembic, PostgreSQL, Redis와 Next.js 운�
 
 기본 브랜치는 `main`입니다. Phase 10의 기준 main 커밋은 `b1f1f15ac3b6a396fe9f14e549f11721f49bfb7f`이며 변경은 `feat/phase10-supplier-operations`에서 리뷰합니다. main에 전체 소스가 없다는 과거 인수인계 문구는 더 이상 현재 상태가 아닙니다. 과거 ZIP은 provenance 자료이며 현재 source of truth는 Git 저장소입니다. 과거 기록은 `docs/history/`에 보존했습니다.
 
-실행된 검사와 미실행 검사를 구분한 최신 기록은 `docs/phase10-verification.md`와 해당 커밋의 GitHub Actions 아티팩트에 있습니다. lockfile 생성/커밋 워크플로 성공은 애플리케이션 CI 성공을 의미하지 않습니다. 현재 자동화율은 측정하지 않았고 production-ready라고 선언하지 않습니다.
+실행된 검사와 미실행 검사를 구분한 최신 기록은 `docs/phase10-verification.md`와 해당 커밋의 GitHub Actions 아티팩트에 있습니다. 첫 전체 GitHub Actions 실행 `36151766961`에서 188개 테스트(일반 183 + PostgreSQL 3 + Redis 2), 커버리지 90.60%, 프런트엔드 설치·타입 검사·프로덕션 빌드가 실제 통과했습니다. 검증 커밋은 `bdf716666ccb3261b4d7ba188733b0bb7c6947f7`이며 이후 변경은 새 실행 결과를 확인해야 합니다. 현재 자동화율은 측정하지 않았고 production-ready라고 선언하지 않습니다.
 
 ## 새 공급사 Excel 경로
 

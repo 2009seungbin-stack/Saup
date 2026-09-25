@@ -34,7 +34,7 @@ main 기준 커밋은 `b1f1f15ac3b6a396fe9f14e549f11721f49bfb7f`이며 전체 �
 
 ## 검증과 남은 사항
 
-정확한 실행 결과는 `docs/phase10-verification.md`와 소스 SHA가 일치하는 CI 아티팩트를 우선합니다. Python 3.13 로컬 결과를 Python 3.12/PG/Redis/브라우저 통과로 대체하지 않습니다. 현재 CI 성공 여부는 해당 실행을 확인해야 합니다. 재현 명령은 README와 `scripts/verify_phase10.py`에 있습니다.
+정확한 실행 결과는 `docs/phase10-verification.md`와 소스 SHA가 일치하는 CI 아티팩트를 우선합니다. Python 3.13 로컬 결과를 Python 3.12/PG/Redis/브라우저 통과로 대체하지 않습니다. 첫 전체 CI 실행 36151766961은 커밋 bdf716666ccb3261b4d7ba188733b0bb7c6947f7에서 실제 성공했습니다: 일반 183개 + PostgreSQL 3개 + Redis 2개, 실패/스킵 0개, statement coverage 90.60%, npm ci/typecheck/build 통과. 이후 커밋은 해당 커밋에 연결된 새 실행 결과를 확인해야 합니다. 재현 명령은 README와 `scripts/verify_phase10.py`에 있습니다.
 
 내부 후속 검증: 브라우저 역할별 E2E, Docker clean build/start/restart, 부하/장애/복구, 증빙 저장소/보존 정책, 최소권한 DB/키 회전/MFA, 실제 공급사 템플릿 검수. 외부 차단: 공급사 계약·실제 파일 프로필·지급처/예치금 근거, 공식 마켓/지급 API 접근권한. `REAL_PAYMENTS_ENABLED`는 계속 차단입니다.
 

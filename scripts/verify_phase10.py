@@ -34,6 +34,8 @@ def verify(mode,out,require_services):
     out.mkdir(parents=True,exist_ok=True)
     entries=[]
     sha=capture(['git','rev-parse','HEAD'])
+    status_before=capture(['git','status','--porcelain','--untracked-files=no'])
+    (out/'source-status-before.txt').write_text((status_before or '')+'\n')
     (out/'source-sha.txt').write_text((sha or 'UNAVAILABLE')+'\n')
     source={}
     for path in sorted(ROOT.rglob('*')):
@@ -82,7 +84,12 @@ def verify(mode,out,require_services):
                 entries.append({'name':name,'status':'BLOCKED','executed':False,'reason':'npm ci failed'})
     coverage_file=out/'coverage.json'
     coverage=json.loads(coverage_file.read_text())['totals'] if coverage_file.exists() else None
-    result={'source_commit_sha':sha,'source_dirty':bool(capture(['git','status','--porcelain','--untracked-files=no'])),
+    status_after=capture(['git','status','--porcelain','--untracked-files=no'])
+    (out/'source-status-after.txt').write_text((status_after or '')+'\n')
+    diff=capture(['git','diff','--no-ext-diff','--no-color','HEAD','--'])
+    (out/'tracked-source-changes.patch').write_text((diff or '')+'\n')
+    result={'source_commit_sha':sha,'source_dirty_before':bool(status_before),
+        'source_dirty':bool(status_after),'tracked_source_diff':'tracked-source-changes.patch',
         'source_head_sha':os.environ.get('SOURCE_HEAD_SHA'), 'source_base_sha':os.environ.get('SOURCE_BASE_SHA'),
         'python':platform.python_version(),'recorded_at_utc':datetime.now(timezone.utc).isoformat(),
         'github_run_id':os.environ.get('GITHUB_RUN_ID'),'mode':mode,'checks':entries,'statement_coverage':coverage,

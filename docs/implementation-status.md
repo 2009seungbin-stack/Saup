@@ -12,7 +12,7 @@ Existing catalogue, cash/risk/reservation, demo API provider, claims/refunds/set
 
 ## TESTED / NOT TESTED
 
-See `phase10-verification.md` and source-bound CI artifacts for exact commands/counts/coverage. Unit tests are not proof of PostgreSQL concurrency or a browser session. A committed workflow is not evidence that it ran. The synthetic script exercises both manual-evidence and demo-provider paths with no real money.
+The actual full CI run 36151766961 passed on bdf716666ccb3261b4d7ba188733b0bb7c6947f7: 183 ordinary + 3 PostgreSQL + 2 Redis tests, zero failures/errors/skips, statement coverage 90.60%, both synthetic paths, npm ci/typecheck/build. See `phase10-verification.md` and source-bound CI artifacts for exact commands/counts/coverage; later commits require their own run. Unit tests are not proof of PostgreSQL concurrency or a browser session. A committed workflow is not evidence that it ran. The synthetic script exercises both manual-evidence and demo-provider paths with no real money.
 
 ## BLOCKED
 
