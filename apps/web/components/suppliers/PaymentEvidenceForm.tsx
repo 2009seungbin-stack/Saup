@@ -42,7 +42,8 @@ export default function PaymentEvidenceForm({paymentId,role,onSaved}:{paymentId:
       <label className="check"><input type="checkbox" checked={confirmed} onChange={e=>setConfirmed(e.target.checked)}/>해당 수취처로 이 금액의 실제 지급이 완료되었음을 증빙으로 확인했습니다.</label>
       <button className="primary" disabled={busy||!confirmed||!reference||payment.status!=='EVIDENCE_PENDING'} onClick={()=>void action(()=>api(`/v1/supplier-payment-evidence/${payment.evidence_id}/confirm`,{method:'POST',body:JSON.stringify({amount:payment.amount,destination_fingerprint:payment.destination_fingerprint,reference,confirmed_money_moved:true})}))}>관리자 지급 증빙 확인</button>
     </>}
-    {payment.evidence_id&&role!=='admin'&&<p>관리자 확인 대기 중입니다. 운영자는 지급 확정을 수행할 수 없습니다.</p>}
+    {payment.evidence_id&&payment.evidence_status!=='CONFIRMED'&&role!=='admin'&&<p>관리자 확인 대기 중입니다. 운영자는 지급 확정을 수행할 수 없습니다.</p>}
+    {payment.evidence_status==='CONFIRMED'&&<p role="status">관리자 지급 증빙 확인이 완료되었습니다. 이 화면에서 송금을 실행한 것은 아닙니다.</p>}
     {error&&<p className="error" role="alert">{error}</p>}
   </section>;
 }
