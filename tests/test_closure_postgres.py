@@ -50,6 +50,16 @@ def shipped(e):
 
 
 @pytest.mark.postgres
+def test_postgres_supplier_deposit_keeps_integer_reservation_and_audit(pg_excel_env):
+    e=pg_excel_env;ops=Operations(e['commerce'])
+    ops.funds(evidence('pg-deposit',amount=5000),ADMIN,e['ids']['supplier_id'])
+    ops,oid,sid,hashed=shipped(e)
+    from packages.application.finance import treasury
+    with e['factory']() as s:
+        assert all(isinstance(v,int) for v in treasury(s,e['settings'],e['ids']['supplier_id']).values())
+
+
+@pytest.mark.postgres
 def test_external_shipment_confirmation_race(pg_excel_env):
     e=pg_excel_env;ops,oid,sid,hashed=shipped(e)
     from packages.infrastructure.models import Order

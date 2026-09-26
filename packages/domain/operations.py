@@ -54,7 +54,7 @@ class ShipmentConfirmation(Evidence):
 
 
 class ClaimInput(Strict):
-    external_id: Reference
+    external_id: Reference = Field(max_length=120)
     category: Literal['ROTTEN', 'BROKEN', 'BRUISED', 'WRONG_ITEM', 'MISSING_WEIGHT', 'DELIVERY_DELAY',
                       'CHANGE_OF_MIND', 'TASTE_COMPLAINT', 'ADDRESS_ERROR', 'MISSING_ITEM', 'OTHER']
     amount: PositiveMoney
@@ -85,7 +85,7 @@ class RefundConfirmation(Evidence):
 
 
 class SettlementInput(Evidence):
-    external_id: Reference
+    external_id: Reference = Field(max_length=120)
     actual: Money
     adjustment: Annotated[int, Field(strict=True, ge=-10**9, le=10**9)]
 

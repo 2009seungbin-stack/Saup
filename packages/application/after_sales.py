@@ -196,7 +196,7 @@ class AfterSales:
             if order.state != "DELIVERED": raise DomainError("SETTLEMENT_REQUIRES_DELIVERY")
             unsettled_refund = s.scalar(select(Refund.id).where(Refund.order_id == order.id, Refund.status != "SUCCEEDED"))
             if unsettled_refund: raise DomainError("PENDING_REFUND_RECONCILIATION")
-            refunded = s.scalar(select(func.coalesce(func.sum(Refund.amount), 0)).where(Refund.order_id == order.id, Refund.status == "SUCCEEDED"))
+            refunded = int(s.scalar(select(func.coalesce(func.sum(Refund.amount), 0)).where(Refund.order_id == order.id, Refund.status == "SUCCEEDED")))
             expected = order.gross_sale-order.discount-order.fee-order.promotion_cost-refunded+adjustment
             if expected < 0: raise DomainError("NEGATIVE_SETTLEMENT_REQUIRES_MANUAL_RECONCILIATION")
             row = Settlement(order_id=order_id, external_id=external_id, expected=expected, actual=actual,

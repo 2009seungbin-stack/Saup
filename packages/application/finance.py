@@ -61,13 +61,15 @@ def balance(s, code: str) -> int:
 
 
 def treasury(s, settings, supplier_id=None) -> dict:
-    bank_held = s.scalar(select(func.coalesce(func.sum(Reservation.bank_amount), 0)).where(Reservation.status == "HELD"))
+    # PostgreSQL SUM(bigint) returns NUMERIC/Decimal, unlike SQLite. KRW stays
+    # integer at the query boundary, including JSON audit and ledger payloads.
+    bank_held = int(s.scalar(select(func.coalesce(func.sum(Reservation.bank_amount), 0)).where(Reservation.status == "HELD")))
     reserves = settings.safety_reserve + settings.refund_reserve + settings.tax_reserve
     bank = balance(s, "BANK")
     free_bank = bank - bank_held - reserves
     deposit = balance(s, f"DEPOSIT:{supplier_id}") if supplier_id else 0
-    deposit_held = s.scalar(select(func.coalesce(func.sum(Reservation.deposit_amount), 0)).where(
-        Reservation.supplier_id == supplier_id, Reservation.status == "HELD")) if supplier_id else 0
+    deposit_held = int(s.scalar(select(func.coalesce(func.sum(Reservation.deposit_amount), 0)).where(
+        Reservation.supplier_id == supplier_id, Reservation.status == "HELD"))) if supplier_id else 0
     free_deposit = max(0, deposit - deposit_held)
     # A deposit cannot pay unrelated suppliers or fund a missing liquid refund reserve.
     spendable = max(0, free_bank) + free_deposit if free_bank >= 0 else 0
@@ -137,7 +139,7 @@ def daily_commitments(s, exclude_id=None, at=None) -> int:
         (Payment.status == "SUCCEEDED") & (Payment.dispatched_at >= start)))
     if exclude_id:
         query = query.where(Payment.id != exclude_id)
-    return s.scalar(query)
+    return int(s.scalar(query))
 
 
 def settle_payment(s, payment, provider_reference: str, *, source="DEMO_PROVIDER"):

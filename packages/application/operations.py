@@ -220,7 +220,7 @@ class Operations:
                     raise DomainError('SALE_ACCOUNTING_REQUIRED')
                 # Full-sale refunds may require fee credits; keep those unsupported
                 # negative-receivable cases blocked rather than spending other orders.
-                refunded = s.scalar(select(func.coalesce(func.sum(Refund.amount), 0)).where(Refund.order_id == order.id, Refund.status == 'SUCCEEDED'))
+                refunded = int(s.scalar(select(func.coalesce(func.sum(Refund.amount), 0)).where(Refund.order_id == order.id, Refund.status == 'SUCCEEDED')))
                 if refunded+refund.amount > order.gross_sale-order.discount-order.fee-order.promotion_cost:
                     raise DomainError('REFUND_FEE_RECONCILIATION_REQUIRED')
                 post(s, f'refund:{refund.id}', 'CUSTOMER_REFUND', {'REFUND_EXPENSE': refund.amount,
@@ -238,6 +238,9 @@ class Operations:
             if s.scalar(select(Order.id).where(Order.marketplace == order.marketplace, Order.external_id == order.external_id, Order.id != order.id)):
                 raise DomainError('MULTI_LINE_MARKETPLACE_ORDER_UNSUPPORTED')
             def effect():
+                if s.scalar(select(Claim.id).where(Claim.order_id == order.id,
+                        or_(Claim.status != 'REFUNDED', Claim.supplier_recovery < Claim.supplier_accepted_amount))):
+                    raise DomainError('OPEN_CLAIM_RECONCILIATION_REQUIRED')
                 self.after.reconcile_settlement(order_id, cmd.external_id, cmd.actual, cmd.adjustment, tolerance=0, actor=actor.username, session=s)
             result = self.receipt(s, 'SETTLEMENT_STATEMENT_RECORDED', order.id, f'statement:{order.marketplace}', cmd, actor, effect)
             result['settlement_id'] = s.scalar(select(Settlement.id).where(Settlement.order_id == order.id))
@@ -271,7 +274,7 @@ class Operations:
                     raise DomainError('SETTLEMENT_REFERENCE_IN_USE')
                 if s.scalar(select(Refund.id).where(Refund.order_id == order.id, Refund.status != 'SUCCEEDED')):
                     raise DomainError('PENDING_REFUND_RECONCILIATION')
-                refunded = s.scalar(select(func.coalesce(func.sum(Refund.amount), 0)).where(Refund.order_id == order.id, Refund.status == 'SUCCEEDED'))
+                refunded = int(s.scalar(select(func.coalesce(func.sum(Refund.amount), 0)).where(Refund.order_id == order.id, Refund.status == 'SUCCEEDED')))
                 expected = order.gross_sale-order.discount-order.fee-order.promotion_cost-refunded+cmd.adjustment
                 if expected < 0: raise DomainError('NEGATIVE_SETTLEMENT_REQUIRES_MANUAL_RECONCILIATION')
                 before = safe(row, 'external_id expected actual difference adjustment input_hash')

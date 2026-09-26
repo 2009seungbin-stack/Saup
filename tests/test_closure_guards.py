@@ -61,6 +61,14 @@ def test_manual_refund_replay_history_and_cross_claim_sale_ceiling(env,order_inp
         assert s.scalar(select(func.count()).select_from(Journal).where(Journal.kind=='CUSTOMER_REFUND'))==1
 
 
+def test_operational_statement_cannot_strand_an_open_claim(env,order_input):
+    ops,oid,cid,rid,cmd=refundable(env,order_input)
+    with pytest.raises(DomainError,match='OPEN_CLAIM'):
+        ops.settlement(oid,evidence('premature-statement',external_id='premature',actual=10000,adjustment=0),OP)
+    with env['factory']() as s:assert not s.scalar(select(Settlement))
+    ops.confirm_refund(rid,cmd,ADMIN)
+
+
 def settlement_ready(env,raw):
     oid=delivered(env,raw);ops=Operations(env['commerce'])
     with env['factory']() as s:
