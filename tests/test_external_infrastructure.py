@@ -36,6 +36,7 @@ def test_postgres_concurrent_order_and_payment_gate():
             with Operations.context(MigrationContext.configure(connection)):
                 importlib.import_module('migrations.versions.0001_initial').upgrade()
                 importlib.import_module('migrations.versions.0002_supplier_operations').upgrade()
+                importlib.import_module('migrations.versions.0003_review_resolution').upgrade()
         settings=Settings(_env_file=None,app_mode='test',database_url=url,admin_password='integration-test-password',
             pii_encryption_key=Fernet.generate_key().decode())
         ids=seed(settings,factory,demo=True);commerce=Commerce(settings,factory);Worker(commerce).drain()

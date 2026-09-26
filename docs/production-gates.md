@@ -29,3 +29,8 @@ Cross-browser/mobile acceptance and production HTTPS; failure/load tests and bac
 ## External dependencies
 
 Coupang, Temu and AliExpress account/API approval and official contracts, authorized supplier processes, and a certified live payment/deposit provider. The application must explicitly block missing provider access and never invent endpoints or automate browser banking.
+
+
+## Phase 11A bounded review resolution
+
+Phase 11A requires migration 0003 and coordinated application version rollout: old binaries do not understand evidence correction holds. Nonempty new history or correction reviews block downgrade. Partial/changed-allocation/post-shipment recoveries and customer refund completion remain blocked. See phase11-review-resolution.md; only current-SHA executed artifacts qualify as verification.

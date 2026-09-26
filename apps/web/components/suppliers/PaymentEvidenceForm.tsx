@@ -6,6 +6,7 @@ import {SupplierPayment,won} from './types';
 export default function PaymentEvidenceForm({paymentId,role,onSaved}:{paymentId:string;role:string;onSaved:()=>Promise<void>}) {
   const [payment,setPayment]=useState<SupplierPayment|null>(null),[reference,setReference]=useState(''),[hash,setHash]=useState('');
   const [confirmed,setConfirmed]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState('');
+  const [correctionReason,setCorrectionReason]=useState('WRONG_ATTACHMENT');
   const refresh=useCallback(async()=>{
     const value=await api<SupplierPayment>(`/v1/supplier-payments/${paymentId}`);setPayment(value);
     if(value.evidence){setReference(value.evidence.reference);setHash(value.evidence.evidence_hash);}
@@ -37,13 +38,22 @@ export default function PaymentEvidenceForm({paymentId,role,onSaved}:{paymentId:
       <label>로컬 증빙 파일에서 해시 계산 · 파일은 업로드하지 않음<input type="file" onChange={e=>{const file=e.target.files?.[0];if(file)void hashLocal(file).catch(e=>setError(String(e)));}}/></label>
       <button disabled={busy}>증빙 기록 · 아직 지급 확정 아님</button>
     </form>}
-    {payment.evidence_id&&payment.evidence_status!=='CONFIRMED'&&role==='admin'&&<>
+    {payment.evidence_id&&payment.evidence_status==='RECORDED'&&role==='admin'&&<>
       <label>증빙과 일치하는 지급 참조 번호<input value={reference} onChange={e=>setReference(e.target.value)} required/></label>
       <label className="check"><input type="checkbox" checked={confirmed} onChange={e=>setConfirmed(e.target.checked)}/>해당 수취처로 이 금액의 실제 지급이 완료되었음을 증빙으로 확인했습니다.</label>
-      <button className="primary" disabled={busy||!confirmed||!reference||payment.status!=='EVIDENCE_PENDING'} onClick={()=>void action(()=>api(`/v1/supplier-payment-evidence/${payment.evidence_id}/confirm`,{method:'POST',body:JSON.stringify({amount:payment.amount,destination_fingerprint:payment.destination_fingerprint,reference,confirmed_money_moved:true})}))}>관리자 지급 증빙 확인</button>
+      <button className="primary" disabled={busy||!confirmed||!reference||payment.status!=='EVIDENCE_PENDING'} onClick={()=>void action(()=>api(`/v1/supplier-payment-evidence/${payment.evidence_id}/confirm`,{method:'POST',body:JSON.stringify({amount:payment.amount,destination_fingerprint:payment.destination_fingerprint,reference,evidence_revision_id:payment.evidence_revision_id,confirmed_money_moved:true})}))}>관리자 지급 증빙 확인</button>
     </>}
-    {payment.evidence_id&&payment.evidence_status!=='CONFIRMED'&&role!=='admin'&&<p>관리자 확인 대기 중입니다. 운영자는 지급 확정을 수행할 수 없습니다.</p>}
+    {payment.evidence_id&&payment.evidence_status==='RECORDED'&&role!=='admin'&&<p>관리자 확인 대기 중입니다. 운영자는 지급 확정을 수행할 수 없습니다.</p>}
     {payment.evidence_status==='CONFIRMED'&&<p role="status">관리자 지급 증빙 확인이 완료되었습니다. 이 화면에서 송금을 실행한 것은 아닙니다.</p>}
+    {payment.evidence_status==='CORRECTION_REQUIRED'&&<p role="status">증빙 정정 검토 중입니다. 지급 확인이 차단되었습니다. 검토 해결 메뉴에서 처리하세요.</p>}
+    {payment.evidence_id&&payment.evidence_status==='RECORDED'&&['EVIDENCE_PENDING','MANUAL_APPROVAL'].includes(payment.status)&&<div>
+      <label>증빙 정정 사유<select value={correctionReason} onChange={e=>setCorrectionReason(e.target.value)} disabled={busy}>
+        <option value="WRONG_ATTACHMENT">잘못된 증빙 파일</option><option value="WRONG_REFERENCE">잘못된 참조 번호</option><option value="REFERENCE_AND_ATTACHMENT">참조 번호와 증빙 파일</option>
+      </select></label>
+      <button disabled={busy} onClick={()=>void action(()=>api(`/v1/supplier-payment-evidence/${payment.evidence_id}/correction-request`,{method:'POST',body:JSON.stringify({
+        idempotency_key:`evidence-request-${payment.evidence_id}-${payment.evidence_revision_id||'original'}`,
+        expected_revision_id:payment.evidence_revision_id,reason:correctionReason})}))}>증빙 정정 요청 · 지급 확인 차단</button>
+    </div>}
     {error&&<p className="error" role="alert">{error}</p>}
   </section>;
 }

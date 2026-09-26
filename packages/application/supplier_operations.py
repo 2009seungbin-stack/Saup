@@ -19,7 +19,7 @@ from packages.infrastructure.models import (
     SupplierOrder, Supplier, SupplierExcelProfile, Order, Payment, Reservation, Review,
     SupplierOrderIntent, SupplierOrderBatch, SupplierOrderBatchItem,
     SupplierBatchAcknowledgement, SupplierPaymentEvidence, SupplierPaymentConfirmation,
-    SupplierCancellation, OperationalIntervention, AuditEvent, MarketplaceListing,
+    SupplierCancellation, OperationalIntervention, AuditEvent, MarketplaceListing, SupplierEvidenceConfirmationBinding,
 )
 from packages.infrastructure.security import fingerprint
 from packages.infrastructure.schema_v1 import uid
@@ -29,6 +29,7 @@ from .common import lock_treasury, audit, review, execute_command, enqueue
 from .finance import release, settle_payment, daily_commitments, treasury, balance
 from .catalog import pause_listing, inventory_guard
 from .risk import guard_cash_and_claims
+from .payment_evidence import effective_evidence, correction_pending, reference_in_use
 
 
 def supplier_transition(s, so, target, *, actor="system", reason="RULE"):
@@ -412,15 +413,17 @@ class SupplierOperations:
             intent = self.intent(s, so)
             reservation = s.scalar(select(Reservation).where(Reservation.order_id == payment.order_id))
             evidence = s.scalar(select(SupplierPaymentEvidence).where(SupplierPaymentEvidence.payment_id == payment.id))
+            effective = effective_evidence(s, evidence) if evidence else {}
             return {"id": payment.id, "supplier_id": intent.supplier_id, "amount": payment.amount,
+                "evidence_revision_id": effective.get("revision_id"),
                 "destination_fingerprint": payment.destination_fingerprint, "status": payment.status,
                 "bank_amount": reservation.bank_amount, "deposit_amount": reservation.deposit_amount,
                 "evidence_id": evidence.id if evidence else None,
-                "evidence": {"id": evidence.id, "method": evidence.method, "reference": evidence.reference,
-                    "evidence_hash": evidence.evidence_hash, "recorded_by": evidence.recorded_by,
+                "evidence": {"id": evidence.id, "method": evidence.method, "reference": effective["reference"],
+                    "evidence_hash": effective["evidence_hash"], "revision_id": effective["revision_id"], "recorded_by": evidence.recorded_by,
                     "recorded_at": evidence.recorded_at} if evidence else None,
                 "evidence_status": "CONFIRMED" if evidence and s.scalar(select(SupplierPaymentConfirmation.id).where(
-                    SupplierPaymentConfirmation.evidence_id == evidence.id)) else "RECORDED" if evidence else "ABSENT"}
+                    SupplierPaymentConfirmation.evidence_id == evidence.id)) else "CORRECTION_REQUIRED" if evidence and correction_pending(s, evidence.id) else "RECORDED" if evidence else "ABSENT"}
 
     def record_evidence(self, payment_id, raw, actor: Actor):
         actor.require(); cmd = EvidenceRecord.model_validate(raw)
@@ -433,6 +436,8 @@ class SupplierOperations:
                 if prior.payload_hash != hashed:
                     raise DomainError("PAYMENT_EVIDENCE_CONFLICT")
                 return {"id": prior.id, "payment_id": payment.id}
+            if reference_in_use(s, cmd.supplier_id, cmd.reference, payment.id):
+                raise DomainError("PAYMENT_EVIDENCE_REFERENCE_IN_USE")
             so = self.get(s, SupplierOrder, payment.supplier_order_id)
             intent = self.intent(s, so)
             item = self.active_item(s, so.id)
@@ -467,7 +472,8 @@ class SupplierOperations:
 
     def confirm_evidence(self, evidence_id, raw, actor: Actor):
         actor.require("admin"); cmd = EvidenceConfirm.model_validate(raw)
-        hashed = fingerprint(cmd.model_dump()); error = None; result = None
+        # Keep pre-0003 confirmation hashes replay-compatible when no revision exists.
+        hashed = fingerprint(cmd.model_dump(exclude_none=True)); error = None; result = None
         with self.factory.begin() as s:
             lock_treasury(s)
             proof = self.get(s, SupplierPaymentEvidence, evidence_id)
@@ -480,9 +486,14 @@ class SupplierOperations:
             order = self.get(s, Order, payment.order_id)
             so = self.get(s, SupplierOrder, payment.supplier_order_id)
             try:
+                effective = effective_evidence(s, proof)
+                if correction_pending(s, proof.id):
+                    raise DomainError("PAYMENT_EVIDENCE_CORRECTION_REQUIRED")
+                if cmd.evidence_revision_id != effective["revision_id"]:
+                    raise DomainError("STALE_EVIDENCE_REVISION")
                 if (cmd.amount != payment.amount or cmd.amount != proof.amount or
                         cmd.destination_fingerprint != payment.destination_fingerprint or
-                        cmd.destination_fingerprint != proof.destination_fingerprint or cmd.reference != proof.reference):
+                        cmd.destination_fingerprint != proof.destination_fingerprint or cmd.reference != effective["reference"]):
                     raise DomainError("PAYMENT_CONFIRMATION_SNAPSHOT_MISMATCH")
                 if payment.status != "EVIDENCE_PENDING":
                     raise DomainError("PAYMENT_NOT_EVIDENCE_CONFIRMABLE")
@@ -502,16 +513,20 @@ class SupplierOperations:
                     payload_hash=hashed, actor=actor.username, confirmed_at=self.c.clock(), amount=cmd.amount,
                     destination_fingerprint=cmd.destination_fingerprint, reference=cmd.reference)
                 s.add(confirmation); s.flush()
+                if effective["revision_id"]:
+                    s.add(SupplierEvidenceConfirmationBinding(confirmation_id=confirmation.id, revision_id=effective["revision_id"]))
                 payment.dispatched_at = self.c.clock()
                 settle_payment(s, payment, f"manual-evidence:{proof.id}", source="MANUAL_EVIDENCE")
                 transition(s, order, "SUPPLIER_PAID", "ADMIN_PAYMENT_EVIDENCE")
                 transition(s, order, "SHIPMENT_PENDING", "ADMIN_PAYMENT_EVIDENCE")
                 self.payment_completed(s, payment)
                 resolve_reviews(s, payment.id, ["PAYMENT_APPROVAL", "PAYMENT_EVIDENCE_SNAPSHOT_MISMATCH",
-                    "PAYMENT_CONFIRMATION_SNAPSHOT_MISMATCH"], actor.username, self.c.clock(), "CONFIRM_MANUAL_PAYMENT")
+                    "PAYMENT_CONFIRMATION_SNAPSHOT_MISMATCH", "STALE_EVIDENCE_REVISION",
+                    "PAYMENT_EVIDENCE_CORRECTION_REQUIRED"], actor.username, self.c.clock(), "CONFIRM_MANUAL_PAYMENT")
                 audit(s, "SUPPLIER_PAYMENT_CONFIRMED", payment.id, actor=actor.username,
                     new={"supplier_id": proof.supplier_id, "amount": payment.amount, "evidence_id": proof.id,
-                         "destination_fingerprint": payment.destination_fingerprint, "source": "MANUAL_EVIDENCE"})
+                         "destination_fingerprint": payment.destination_fingerprint, "source": "MANUAL_EVIDENCE",
+                         "evidence_revision_id": effective["revision_id"]})
                 intervention(s, "PAYMENT_EVIDENCE_CONFIRMED_MANUALLY", f"payment-confirmed:{payment.id}", actor.username,
                     self.c.clock(), order=order, batch_id=batch.id, supplier_id=proof.supplier_id)
                 result = {"id": confirmation.id, "payment_id": payment.id, "status": "CONFIRMED"}

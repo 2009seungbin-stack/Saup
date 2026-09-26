@@ -10,6 +10,7 @@ from .commerce import context, transition
 from .common import lock_treasury, audit, review, enqueue
 from .finance import post
 from .supplier_operations import intervention
+from packages.infrastructure.models import SupplierCancellationRecovery
 
 CATEGORIES = {"ROTTEN", "BROKEN", "BRUISED", "WRONG_ITEM", "MISSING_WEIGHT", "DELIVERY_DELAY", "CHANGE_OF_MIND",
               "TASTE_COMPLAINT", "ADDRESS_ERROR", "MISSING_ITEM", "OTHER"}
@@ -101,6 +102,8 @@ class AfterSales:
             order = s.get(Order, claim.order_id); supplier = context(s, order)[2]
             paid = s.scalar(select(Payment.amount).where(Payment.order_id == order.id, Payment.status == "SUCCEEDED")) or 0
             recovered = s.scalar(select(func.coalesce(func.sum(Claim.supplier_recovery), 0)).where(Claim.order_id == order.id))
+            recovered += s.scalar(select(func.coalesce(func.sum(SupplierCancellationRecovery.amount), 0)).join(
+                Payment, SupplierCancellationRecovery.payment_id == Payment.id).where(Payment.order_id == order.id))
             if recovered + amount > paid: raise DomainError("RECOVERY_EXCEEDS_SUPPLIER_PAYMENT")
             post(s, f"supplier-recovery:{supplier.id}:{receipt_id}", "SUPPLIER_RECOVERY",
                  {f"DEPOSIT:{supplier.id}": amount, "SUPPLIER_RECOVERY": -amount}, order.id, order.correlation_id)

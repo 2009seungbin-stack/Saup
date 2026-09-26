@@ -36,7 +36,7 @@ Additional tests cover roles/session/CSRF/origin/rate limits/redaction, formula/
 
 `test_supplier_recovery.py`: original-economics recovery, unrelated-risk pause protection, UNKNOWN payment behavior, conflicting/reused evidence, superseded batch cancellation, illegal transitions, immutable records, migration round-trip/legacy adoption/nonempty downgrade guard, manual settlement categories.
 
-`test_supplier_postgres.py` (real service required): concurrent identical acknowledgement creates one payment; concurrent evidence and admin confirmation create one receipt/confirmation/journal; concurrent duplicate tracking creates one shipment/job; append-only DB triggers; competing incompatible acknowledgements have one winner and a deterministic conflict. Existing PostgreSQL test now migrates through 0002. Redis tests include distributed sharing and fail-closed unavailable connection.
+`test_supplier_postgres.py` (real service required): concurrent identical acknowledgement creates one payment; concurrent evidence and admin confirmation create one receipt/confirmation/journal; concurrent duplicate tracking creates one shipment/job; append-only DB triggers; competing incompatible acknowledgements have one winner and a deterministic conflict. PostgreSQL fixtures now migrate through 0003. Redis tests include distributed sharing and fail-closed unavailable connection.
 
 `scripts/demo_supplier_operations.py` uses temporary synthetic SQLite databases and both payment policies, with accepted/rejected lines and repeated commands, tracking import and mock marketplace update. No browser, Docker or live provider execution is implied. `scripts/verify_phase10.py` records exact checks/source hashes/coverage/logs and fails configured infrastructure gates on skip. See phase10-verification.md for executed results.
 
@@ -47,3 +47,8 @@ Additional tests cover roles/session/CSRF/origin/rate limits/redaction, formula/
 `tests/test_acceptance_fixture.py` adds 21 ordinary cases for environment/credential/one-shot guards and rejection of incomplete, duplicate or unbalanced verification results. The existing login-rate-limit test fixes only its clock to test both the same-minute 11th-request rejection and the next-minute reset without wall-clock flakiness.
 
 The acceptance workflow compares durable PostgreSQL order/payment/evidence/shipment IDs, counts and account/journal balances before and after DB/Redis/API/worker/web restart. It rejects zero, incomplete or skipped browser selection. See `phase10-acceptance.md` for isolation and reproduction. This does not exercise live payments, real supplier acceptance or backup restore.
+
+
+## Phase 11A bounded review resolution
+
+Phase 11A suites: test_review_resolution.py, test_review_resolution_api.py, test_review_resolution_postgres.py, tests_browser/test_z_review_resolution_console.py. Verify correction/confirmation races, refund receipt dedupe, append-only history, exact allocations, rollback and customer hold. The acceptance restart snapshot includes new resolution history and schema 0003; do not reuse Phase 10 test counts.

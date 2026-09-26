@@ -91,6 +91,7 @@ class EvidenceRecord(Strict):
         return self
 
 class EvidenceConfirm(Strict):
+    evidence_revision_id: Identifier | None = None
     amount: PositiveMoney
     destination_fingerprint: Hash
     reference: Reference

@@ -14,7 +14,7 @@ export type SupplierBatch = {
 export type Evidence = {id:string; method:string; reference:string; evidence_hash:string; recorded_by:string; recorded_at:string};
 export type SupplierPayment = {
   id:string; supplier_id:string; amount:number; status:string; destination_fingerprint:string;
-  bank_amount:number; deposit_amount:number; evidence_id:string|null; evidence_status:string; evidence?:Evidence|null;
+  bank_amount:number; deposit_amount:number; evidence_id:string|null; evidence_revision_id:string|null; evidence_status:string; evidence?:Evidence|null;
 };
 export const won = (value:number) => new Intl.NumberFormat('ko-KR',{style:'currency',currency:'KRW',maximumFractionDigits:0}).format(value);
 export const at = (value:string|null) => value ? new Date(value).toLocaleString('ko-KR') : '—';

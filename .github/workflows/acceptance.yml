@@ -78,10 +78,10 @@ jobs:
           root = Path('reports/acceptance')
           before = json.loads((root/'business-before-restart.json').read_text())
           after = json.loads((root/'business-after-restart.json').read_text())
-          keys = ('schema_revision','accounts','orders','counts','balanced_journals','journal_count')
+          keys = ('schema_revision','accounts','orders','counts','balanced_journals','journal_count','resolution_records')
           assert all(before[k] == after[k] for k in keys), 'Restart changed durable business effects'
           cases = list(ET.parse(root/'browser-junit.xml').iter('testcase'))
-          assert len(cases) >= 7, 'Browser selection was incomplete'
+          assert len(cases) >= 9, 'Browser selection was incomplete'
           assert all(c.find('skipped') is None and c.find('error') is None and c.find('failure') is None for c in cases)
           result = {'source_sha': (root/'source-sha.txt').read_text().strip(), 'browser_cases':len(cases),
                     'browser':(root/'browser-version.txt').read_text().strip(), 'browser_passed':True,

@@ -32,3 +32,8 @@ FILE_READY can also move directly to SENT with explicit actual-delivery metadata
 Pre-send cancellation can end locally. An exported but unsent batch is invalidated; surviving members return to PENDING and can form a new immutable file. Post-send/acceptance/payment requires CANCEL_PENDING and explicit supplier cancellation. Confirmation of supplier cancellation does not confirm money recovery. After money exposure the order stays CANCEL_REQUESTED with financial review.
 
 MANUAL_REVIEW→SUPPLIER_ORDERED is allowed only through guarded original-term revalidation: unchanged intent, active supplier/listing, current address/margin/inventory/reservation/cash/destination, no cancellation or UNKNOWN payment. Supplier MANUAL_REVIEW→PENDING is limited to admin-verified unsent legacy adoption. No general force-state API exists. Rejected lines never transition directly to payment. Identical command replay does not repeat business effects.
+
+
+## Phase 11A bounded review resolution
+
+Phase 11A supplier cancellation may advance FINANCIAL_REVIEW → FINANCIALLY_RECONCILED after an exact confirmed recovery. The supplier order remains CANCELLED, Payment remains SUCCEEDED, Reservation remains SPENT, and marketplace Order remains CANCEL_REQUESTED pending separate customer/marketplace reconciliation. No new marketplace Order transition or force-state command is added.
