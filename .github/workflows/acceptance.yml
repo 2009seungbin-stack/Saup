@@ -1,4 +1,4 @@
-name: Phase 10 Docker acceptance
+name: Phase 10 Docker and browser acceptance
 on:
   pull_request:
     branches: [main]
@@ -35,6 +35,7 @@ jobs:
             reports/acceptance/source.zip
             reports/acceptance/source-sha.txt
           if-no-files-found: error
+          retention-days: 14
       - name: Generate isolated demo credentials
         run: python scripts/bootstrap.py > /dev/null
       - name: Build real application images
@@ -43,18 +44,52 @@ jobs:
           docker version > reports/acceptance/docker-version.txt
           docker compose version > reports/acceptance/compose-version.txt
           docker compose build --pull 2>&1 | tee reports/acceptance/docker-build.log
-      - name: Start disposable stack and verify same-origin proxy
+      - name: Start disposable stack and verify same-origin readiness
         run: |
           set -o pipefail
           docker compose up -d --wait --wait-timeout 180 2>&1 | tee reports/acceptance/compose-start.log
           curl --fail --retry 20 --retry-all-errors --retry-delay 2 http://localhost:8000/health > reports/acceptance/api-health.json
-          curl --fail --retry 20 --retry-all-errors --retry-delay 2 http://localhost:3000/api/health > reports/acceptance/proxy-health.json
+          curl --fail --retry 30 --retry-all-errors --retry-delay 2 http://localhost:3000/api/ready > reports/acceptance/proxy-ready.json
           curl --fail http://localhost:3000/ > /dev/null
-      - name: Restart application processes without resetting data
+      - name: Install pinned acceptance runner and actual Chromium
         run: |
           set -o pipefail
-          docker compose restart api worker web 2>&1 | tee reports/acceptance/compose-restart.log
-          curl --fail --retry 20 --retry-all-errors --retry-delay 2 http://localhost:3000/api/health > reports/acceptance/proxy-health-after-restart.json
+          python -m pip install -r tests_browser/requirements.txt 2>&1 | tee reports/acceptance/browser-install.log
+          python -m playwright install --with-deps chromium 2>&1 | tee -a reports/acceptance/browser-install.log
+      - name: Real browser supplier workflow and security acceptance
+        run: |
+          set -o pipefail
+          python -m pytest -q tests_browser --junitxml=reports/acceptance/browser-junit.xml 2>&1 | tee reports/acceptance/browser.log
+      - name: Record completed business effects before restart
+        run: |
+          docker compose exec -T -e SAUP_ACCEPTANCE=1 -e COMPOSE_PROJECT_NAME="$COMPOSE_PROJECT_NAME" api python -m scripts.acceptance_fixture verify > reports/acceptance/business-before-restart.json
+      - name: Restart data and application processes without resetting volumes
+        run: |
+          set -o pipefail
+          docker compose restart db redis api worker web 2>&1 | tee reports/acceptance/compose-restart.log
+          curl --fail --retry 30 --retry-all-errors --retry-delay 2 http://localhost:3000/api/ready > reports/acceptance/proxy-ready-after-restart.json
+          docker compose exec -T -e SAUP_ACCEPTANCE=1 -e COMPOSE_PROJECT_NAME="$COMPOSE_PROJECT_NAME" api python -m scripts.acceptance_fixture verify > reports/acceptance/business-after-restart.json
+      - name: Assert persisted business effects and non-skipped browser results
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          root = Path('reports/acceptance')
+          before = json.loads((root/'business-before-restart.json').read_text())
+          after = json.loads((root/'business-after-restart.json').read_text())
+          keys = ('schema_revision','accounts','orders','counts','balanced_journals','journal_count')
+          assert all(before[k] == after[k] for k in keys), 'Restart changed durable business effects'
+          cases = list(ET.parse(root/'browser-junit.xml').iter('testcase'))
+          assert len(cases) >= 7, 'Browser selection was incomplete'
+          assert all(c.find('skipped') is None and c.find('error') is None and c.find('failure') is None for c in cases)
+          result = {'source_sha': (root/'source-sha.txt').read_text().strip(), 'browser_cases':len(cases),
+                    'browser':(root/'browser-version.txt').read_text().strip(), 'browser_passed':True,
+                    'docker_build':True, 'compose_start':True, 'postgres_redis_restart_persistence':True,
+                    'synthetic_only':True, 'real_money_moved':False}
+          (root/'acceptance-result.json').write_text(json.dumps(result, indent=2)+'\n')
+          PY
+          git diff --exit-code
       - name: Collect diagnostics without environment secrets
         if: always()
         run: |
@@ -64,7 +99,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: phase10-docker-acceptance-${{ github.run_id }}
+          name: phase10-docker-browser-acceptance-${{ github.run_id }}
           path: reports/acceptance/
           if-no-files-found: error
           retention-days: 14
