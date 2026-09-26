@@ -1,10 +1,10 @@
 # Saup Phase 10 인수인계
 
-갱신 기준: 2026-09-26. 저장소 `2009seungbin-stack/Saup`, 기본 브랜치 `main`, 작업 브랜치 `feat/phase10-supplier-operations`.
+갱신 기준: 2026-09-26 병합 후. 저장소 `2009seungbin-stack/Saup`, 기본 브랜치 `main`. Phase 10 기능 PR #2는 병합되었습니다.
 
 ## 현재 소스의 기준
 
-main 기준 커밋은 `b1f1f15ac3b6a396fe9f14e549f11721f49bfb7f`이며 전체 구현은 원격에 존재합니다. Phase 10 변경은 작업 브랜치/PR에서 검증 후 병합할 대상이며, 이 문서가 main 병합이나 운영 배포를 주장하지 않습니다. `docs/history/`의 초기 ZIP 인수인계는 날짜가 표시된 과거 기록입니다.
+Phase 10의 main 통합 체크포인트는 `3983ca576d63eccd47d722457d1245c3e20c0fd6`입니다. PR #2의 검증된 head `afe7a488af12e16bb284f9e9ea28f297359d9bbc`와 파일 tree가 같습니다. 병합은 완료되었지만 운영 배포와 실결제 활성화는 하지 않았습니다. 통합 이후 문서 커밋을 포함한 최신 head는 Git과 해당 SHA의 Actions로 확인합니다. 병합 후 검증은 `docs/phase10-main-merge.md`를 기준으로 하며 아래 체크포인트는 날짜가 있는 과거 검증 기록입니다. `docs/history/`의 초기 ZIP 인수인계는 날짜가 표시된 과거 기록입니다.
 
 ## 구현 범위
 

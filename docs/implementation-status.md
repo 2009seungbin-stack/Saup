@@ -2,7 +2,7 @@
 
 ## Current repository truth
 
-The complete foundation is present on main at `b1f1f15ac3b6a396fe9f14e549f11721f49bfb7f`. Phase 10 is developed on `feat/phase10-supplier-operations`. Old empty-repository/ZIP-only claims are historical, preserved under `docs/history/`. Code and migration history outrank prose. This document does not claim main merge, deployment, or production readiness.
+Phase 10 PR #2 was merged into main on 2026-09-26 at integration checkpoint `3983ca576d63eccd47d722457d1245c3e20c0fd6`. Its Git tree matches verified feature head `afe7a488af12e16bb284f9e9ea28f297359d9bbc`. See `phase10-main-merge.md` for separate pre-merge acceptance and post-merge CI evidence. This is a fixed integration checkpoint, not a promise that main never advances. Old empty-repository/ZIP-only claims and the foundation base `b1f1f15ac3b6a396fe9f14e549f11721f49bfb7f` are historical. Code and migration history outrank prose. No production deployment, live payment enablement or production readiness is claimed.
 
 ## IMPLEMENTED
 
