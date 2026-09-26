@@ -16,6 +16,11 @@ REPORTS = ROOT / 'reports' / 'acceptance'
 ORIGIN = 'http://localhost:3000'
 
 
+class RedactedFixture(dict):
+    def __repr__(self):
+        return '<isolated synthetic fixture; credentials redacted>'
+
+
 def docker_fixture(operation, payload=None):
     project = os.environ.get('COMPOSE_PROJECT_NAME', '')
     if not project.startswith('saup-acceptance-'):
@@ -37,9 +42,9 @@ def fixture_data():
     credentials = {f'{role}_password': secrets.token_urlsafe(24) for role in ('operator', 'viewer')}
     data = docker_fixture('seed', credentials)
     config = dict(line.split('=', 1) for line in (ROOT / '.env').read_text().splitlines() if '=' in line and not line.startswith('#'))
-    return {**data, 'credentials': {'operator': ('e2e-operator', credentials['operator_password']),
+    return RedactedFixture({**data, 'credentials': {'operator': ('e2e-operator', credentials['operator_password']),
                                    'viewer': ('e2e-viewer', credentials['viewer_password']),
-                                   'admin': (config['ADMIN_USERNAME'], config['ADMIN_PASSWORD'])}}
+                                   'admin': (config['ADMIN_USERNAME'], config['ADMIN_PASSWORD'])}})
 
 
 @pytest.fixture(scope='session')
@@ -69,6 +74,7 @@ def pages(browser, fixture_data, request):
         else:
             page = contexts[role].new_page(); page.goto('/')
             expect(page.get_by_role('heading', name='운영 현황', exact=True)).to_be_visible(timeout=15000)
+        expect(page.locator('.panel tbody tr').first).to_be_visible(timeout=15000)
         page.on('pageerror', lambda _error: errors.append('UNCAUGHT_BROWSER_ERROR'))
         opened.append((role, page)); return page
     yield open_page
