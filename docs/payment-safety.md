@@ -25,3 +25,14 @@ Single/daily thresholds are configuration, not universal rules. Manual approval 
 ## Known gates
 
 Live account mapping, provider idempotency expiry, partial execution semantics, provider refunds/chargebacks, approval separation under an external identity provider and real deposit/bank reconciliation remain unfinished. Acknowledging a review is not approval. Never repair uncertainty by deleting unique keys, ledger rows or receipt records.
+
+
+## Phase 10 manual evidence is not an API transfer
+
+Batch acknowledgement does not pay. Only unchanged accepted rows may prepare payment. Excel manual batches use EVIDENCE_PENDING (or MANUAL_APPROVAL for limits); no payment.execute job is enqueued. DEMO_PROVIDER batches are permitted only in test/demo and remain labelled synthetic.
+
+Operators register immutable SupplierPaymentEvidence with exact payment/supplier/amount/bank/deposit allocation/destination snapshot/reference/hash. Admin confirmation is a separate immutable SupplierPaymentConfirmation and requires an explicit true money-moved attestation and matching frozen amount/reference/destination. It rechecks supplier/order/accepted terms/HELD reservation/cash/limits. Wrong metadata creates durable review even when the HTTP response is a conflict. Registration alone never changes Payment to SUCCEEDED.
+
+Manual approval does not override DAILY_PAYMENT_LIMIT. A higher-than-AUTO amount still requires the existing admin approval path. Supplier deposits cannot fund another supplier and remain nonnegative; confirmation posts balanced supplier-specific entries and spends the existing reservation. Only confirmed credits are spendable. Duplicate evidence/confirmation is idempotent; differing metadata conflicts. UNKNOWN/SENDING cannot become a manual evidence retry. The old REAL_PAYMENTS_ENABLED startup gate is unchanged.
+
+Proof or a completed/ambiguous payment means money exposure during cancellation. A supplier cancellation confirmation retains FINANCIAL_REVIEW and does not release money, invent a supplier refund, or restore inventory. Correcting mistaken evidence and reconciling actual refunds require dedicated follow-up commands; there is no force paid button. Audit events use IDs, amounts and hashes, not customer PII.

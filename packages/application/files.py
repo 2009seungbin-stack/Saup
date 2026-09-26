@@ -4,7 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from pydantic import ValidationError
 from packages.domain.errors import DomainError
-from packages.infrastructure.models import ImportBatch, SupplierExcelProfile, SupplierOrder, Order
+from packages.infrastructure.models import ImportBatch, SupplierExcelProfile, SupplierOrder, Order, Supplier
 from packages.integrations.suppliers.excel import ExcelProfile, parse, export_orders
 from .catalog import apply_price
 from .commerce import context
@@ -68,6 +68,8 @@ class Files:
         with self.factory.begin() as s:
             lock_treasury(s); profile = s.get(SupplierExcelProfile, profile_id)
             if profile is None: raise DomainError("PROFILE_NOT_FOUND", 404)
+            if s.get(Supplier, profile.supplier_id).mode == "excel":
+                raise DomainError("SUPPLIER_BATCH_REQUIRED")
             rows = []
             for so in s.scalars(select(SupplierOrder).where(SupplierOrder.status.in_(["FILE_READY", "ACCEPTED"]))):
                 order = s.get(Order, so.order_id); _, sp, supplier, _ = context(s, order)

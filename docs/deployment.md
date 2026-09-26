@@ -28,8 +28,10 @@ Create encrypted PostgreSQL backups with your authorized infrastructure tools an
 
 A backup/restore exercise was not performed in this environment. No restore SLA/RPO/RTO is claimed. Follow the organization-approved backup product's official procedures; this document is an operational checklist, not an executed backup.
 
-## Dependency/build gate
+## Dependency/build and acceptance gate
 
-Python behavior was tested with the installed environment recorded in reports. The requested runtime target remains Python >=3.12; this session ran 3.13.5. Next config pins 16.3.6; other frontend dependencies use declared compatible ranges. A complete audited lockfile is not generated because registry network/DNS was unavailable. The web Dockerfile therefore uses npm install, with an explicit release gate to replace it with npm ci after resolving and reviewing the lockfile.
+The frontend lockfile is committed; CI and the web Dockerfile use `npm ci`, not `npm install`. Python 3.12 compile/tests and dependency-resolved Next typecheck/production build ran in GitHub Actions. Earlier registry/network limitations applied to the original local session and do not describe the current repository.
 
-Full Compose startup, Docker image builds, Next dependency-resolved TypeScript checks, SSR/build behavior, browser end-to-end tests, PostgreSQL concurrency and Redis operation must be run before production. The tests/commands exist where feasible; skipped checks are not passes.
+Application backend/web Docker builds, existing Compose init/start, actual Chromium supplier UI transactions and normal restart of PostgreSQL, Redis, API, worker and web were executed in the source-bound acceptance checkpoint recorded in `phase10-verification.md`. Compose acceptance uses PostgreSQL 17 while the standalone integration suite uses PostgreSQL 16; both use Redis 7. See `phase10-acceptance.md` for isolated reproduction. An acceptance run against one source does not validate later commits.
+
+This remains a localhost-only synthetic demo manifest. Do not expose it publicly or reuse its synthetic funds/users as production state. Cross-browser/mobile behavior, production TLS/MFA, load/failure tests, backup restoration and an actual supplier pilot remain separate gates. A normal service restart is not a restore exercise or a disaster-recovery SLA.

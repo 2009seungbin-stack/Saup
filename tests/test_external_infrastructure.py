@@ -25,7 +25,7 @@ from packages.domain.errors import DomainError
 def test_postgres_concurrent_order_and_payment_gate():
     url=os.environ.get('TEST_POSTGRES_URL')
     if not url:pytest.skip('TEST_POSTGRES_URL not configured; PostgreSQL concurrency and deferred triggers not verified')
-    pytest.importorskip('psycopg')
+    import psycopg  # Configured service must never silently skip a missing driver.
     schema='saup_test_'+uuid4().hex
     admin=create_engine(url,hide_parameters=True)
     with admin.begin() as connection:connection.execute(text(f'CREATE SCHEMA {schema}'))
@@ -35,6 +35,7 @@ def test_postgres_concurrent_order_and_payment_gate():
         with engine.begin() as connection:
             with Operations.context(MigrationContext.configure(connection)):
                 importlib.import_module('migrations.versions.0001_initial').upgrade()
+                importlib.import_module('migrations.versions.0002_supplier_operations').upgrade()
         settings=Settings(_env_file=None,app_mode='test',database_url=url,admin_password='integration-test-password',
             pii_encryption_key=Fernet.generate_key().decode())
         ids=seed(settings,factory,demo=True);commerce=Commerce(settings,factory);Worker(commerce).drain()
@@ -72,7 +73,7 @@ def test_postgres_concurrent_order_and_payment_gate():
 def test_distributed_rate_limit_gate():
     url=os.environ.get('TEST_REDIS_URL')
     if not url:pytest.skip('TEST_REDIS_URL not configured; Redis distributed limiter not verified')
-    pytest.importorskip('redis')
+    import redis  # Configured service must never silently skip a missing driver.
     settings=Settings(_env_file=None,app_mode='test',pii_encryption_key=Fernet.generate_key().decode(),
         rate_limit_backend='redis',redis_url=url)
     first,second=RateLimiter(settings),RateLimiter(settings)
@@ -80,3 +81,15 @@ def test_distributed_rate_limit_gate():
     first.hit(identity,2,window=3600);second.hit(identity,2,window=3600)
     with pytest.raises(DomainError,match='RATE_LIMITED'):first.hit(identity,2,window=3600)
     # Test keys expire automatically; never FLUSHDB a shared Redis service.
+
+@pytest.mark.redis
+def test_redis_connection_failure_is_fail_closed():
+    url=os.environ.get('TEST_REDIS_URL')
+    if not url:pytest.skip('TEST_REDIS_URL missing; Redis outage gate NOT verified')
+    import redis
+    # Prove the configured real service is reachable before testing an unavailable endpoint.
+    assert redis.Redis.from_url(url,socket_connect_timeout=2,socket_timeout=2).ping()
+    settings=Settings(_env_file=None,app_mode='test',pii_encryption_key=Fernet.generate_key().decode(),
+        rate_limit_backend='redis',redis_url='redis://127.0.0.1:1/15')
+    with pytest.raises(DomainError,match='RATE_LIMIT_BACKEND_UNAVAILABLE'):
+        RateLimiter(settings).hit('synthetic-outage-'+uuid4().hex,10)

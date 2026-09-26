@@ -1,6 +1,8 @@
-# Verification guide
+# Verification guide — historical foundation record (2026-09-23)
 
-Authoritative measured evidence in this package:
+The paths and limitations below describe the original foundation ZIP, not the current Phase 10 branch. Current source-bound CI and Docker/Chromium evidence are in `phase10-verification.md` and `phase10-acceptance.md`. Do not read the historical lack of browser/PG/Redis execution as the current gate status.
+
+Historical measured evidence in the original package:
 
 - `reports/test-results.txt`: complete latest pytest/coverage output, including skipped infrastructure gates.
 - `reports/pytest.xml`: machine-readable testcase results.

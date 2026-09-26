@@ -9,6 +9,7 @@ from packages.infrastructure.db import aware
 from .commerce import context, transition
 from .common import lock_treasury, audit, review, enqueue
 from .finance import post
+from .supplier_operations import intervention
 
 CATEGORIES = {"ROTTEN", "BROKEN", "BRUISED", "WRONG_ITEM", "MISSING_WEIGHT", "DELIVERY_DELAY", "CHANGE_OF_MIND",
               "TASTE_COMPLAINT", "ADDRESS_ERROR", "MISSING_ITEM", "OTHER"}
@@ -82,9 +83,12 @@ class AfterSales:
             claim.supplier_response, claim.supplier_accepted_amount = response, accepted_amount
             claim.status = "REFUND_ELIGIBLE" if accepted else "MANUAL_REVIEW"
             if not accepted: review(s, "SUPPLIER_REJECTED_CLAIM", claim.id)
+            if actor not in {"supplier", "system"}:
+                intervention(s, "SUPPLIER_CLAIM_RESPONSE_RECORDED_MANUALLY", f"claim-response:{claim.id}",
+                    actor, self.c.clock(), order=s.get(Order, claim.order_id))
             audit(s, "SUPPLIER_CLAIM_RESPONSE", claim.id, actor=actor, new={"response": response, "accepted_amount": accepted_amount}, correlation_id=s.get(Order, claim.order_id).correlation_id)
 
-    def confirm_supplier_recovery(self, claim_id, amount, receipt_id):
+    def confirm_supplier_recovery(self, claim_id, amount, receipt_id, actor="operator"):
         """A confirmed supplier deposit credit, not merely an accepted claim."""
         krw(amount)
         if amount <= 0 or not receipt_id: raise DomainError("CONFIRMED_RECEIPT_REQUIRED")
@@ -101,6 +105,10 @@ class AfterSales:
             post(s, f"supplier-recovery:{supplier.id}:{receipt_id}", "SUPPLIER_RECOVERY",
                  {f"DEPOSIT:{supplier.id}": amount, "SUPPLIER_RECOVERY": -amount}, order.id, order.correlation_id)
             claim.supplier_recovery = amount
+            intervention(s, "SUPPLIER_RECOVERY_CONFIRMED_MANUALLY", f"recovery-confirmed:{claim.id}",
+                actor, self.c.clock(), order=order, supplier_id=supplier.id)
+            audit(s, "SUPPLIER_RECOVERY_CONFIRMED", claim.id, actor=actor,
+                new={"amount": amount, "receipt_hash": fingerprint(receipt_id)}, correlation_id=order.correlation_id)
 
     def request_refund(self, claim_id, amount, key, actor=None):
         krw(amount)
@@ -128,7 +136,8 @@ class AfterSales:
             if manual: review(s, "REFUND_APPROVAL", row.id, {"amount": amount})
             else: enqueue(s, "refund.execute", f"refund:{row.id}", {"refund_id": row.id})
             if actor:
-                order.human_interventions += 1
+                intervention(s, "CLAIM_REFUND_APPROVED_MANUALLY", f"refund-approved:{row.id}",
+                    actor, self.c.clock(), order=order)
                 audit(s, "REFUND_APPROVED", row.id, actor=actor, new={"amount": amount}, correlation_id=order.correlation_id)
             return row.id
 
@@ -160,7 +169,7 @@ class AfterSales:
             claim.customer_refund += row.amount; claim.status = "REFUNDED"
             audit(s, "REFUND_CREATED", row.id, new={"amount": row.amount}, correlation_id=order.correlation_id)
 
-    def reconcile_settlement(self, order_id, external_id, actual, adjustment=0, tolerance=100):
+    def reconcile_settlement(self, order_id, external_id, actual, adjustment=0, tolerance=100, actor=None):
         krw(actual)
         if isinstance(adjustment, bool) or not isinstance(adjustment, int) or abs(adjustment) > 10**9:
             raise DomainError("INVALID_ADJUSTMENT")
@@ -190,10 +199,13 @@ class AfterSales:
                     "MARKETPLACE_RECEIVABLE": -expected, "SETTLEMENT_VARIANCE": expected-actual}, order.id, order.correlation_id)
             transition(s, order, "SETTLEMENT_PENDING")
             if abs(row.difference) > tolerance: review(s, "SETTLEMENT_ANOMALY", row.id, {"expected": expected, "actual": actual, "difference": row.difference})
-            audit(s, "SETTLEMENT_RECONCILED", row.id, new={"expected": expected, "actual": actual}, correlation_id=order.correlation_id)
+            if actor:
+                intervention(s, "SETTLEMENT_RECONCILED_MANUALLY", f"settlement-reconciled:{row.id}",
+                    actor, self.c.clock(), order=order)
+            audit(s, "SETTLEMENT_RECONCILED", row.id, actor=actor or "system", new={"expected": expected, "actual": actual}, correlation_id=order.correlation_id)
             return row.id
 
-    def confirm_settlement_cash(self, settlement_id, receipt_id):
+    def confirm_settlement_cash(self, settlement_id, receipt_id, actor="operator"):
         if not receipt_id: raise DomainError("CONFIRMED_RECEIPT_REQUIRED")
         with self.factory.begin() as s:
             lock_treasury(s); row = s.get(Settlement, settlement_id)
@@ -205,7 +217,9 @@ class AfterSales:
             row.confirmed_cash = True; transition(s, order, "SETTLED")
             open_claim = s.scalar(select(Claim.id).where(Claim.order_id == order.id, Claim.status != "REFUNDED"))
             if row.difference == 0 and not open_claim: transition(s, order, "CLOSED")
-            audit(s, "SETTLEMENT_CASH_CONFIRMED", row.id, correlation_id=order.correlation_id)
+            intervention(s, "SETTLEMENT_CASH_CONFIRMED_MANUALLY", f"settlement-cash:{row.id}",
+                actor, self.c.clock(), order=order)
+            audit(s, "SETTLEMENT_CASH_CONFIRMED", row.id, actor=actor, correlation_id=order.correlation_id)
 
     def claim_metrics(self, s, supplier_product_id, days=30):
         from packages.infrastructure.models import MarketplaceListing

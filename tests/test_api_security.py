@@ -51,11 +51,18 @@ def test_session_expiry(client,env):
         row=s.scalar(select(AuthSession));row.expires_at=row.created_at-timedelta(seconds=1)
     assert client.get('/auth/me').status_code==401
 
-def test_login_rate_limit_and_redacted_validation(client,env):
+def test_login_rate_limit_and_redacted_validation(client,env,monkeypatch):
+    from types import SimpleNamespace
+    # Freeze only the limiter's clock, not the process clock or auth/session time.
+    # Otherwise eleven requests can straddle a real minute and correctly reset.
+    clock=[1_800_000_030.0]
+    monkeypatch.setattr('packages.infrastructure.security.time',SimpleNamespace(time=lambda:clock[0]))
     for i in range(10):
         r=client.post('/auth/login',json={'username':'absent','password':'wrong'},headers={'Origin':env['settings'].public_origin})
         assert r.status_code==401
     assert client.post('/auth/login',json={'username':'absent','password':'wrong'},headers={'Origin':env['settings'].public_origin}).status_code==429
+    clock[0]+=60
+    assert client.post('/auth/login',json={'username':'absent','password':'wrong'},headers={'Origin':env['settings'].public_origin}).status_code==401
     response=client.post('/auth/login',json={'username':'admin','password':'sensitive'*100})
     assert response.status_code==422 and 'sensitive' not in response.text
 

@@ -27,3 +27,8 @@ Orders are normalized **fulfillment lines** with `(marketplace, external_order_i
 9. Hardening: failure/replay tests, retention, deployment and backup/restore instructions.
 
 Each increment is implemented and checked locally. See `docs/implementation-status.md` for measured results, limitations and remaining gates. The schema snapshot `schema_v1.py` is frozen at this release; future changes require a new migration rather than editing that snapshot.
+
+
+## Phase 10 extension (2026-09-25)
+
+The existing modular architecture remains. `SupplierOperations` coordinates frozen supplier intents, relational batches, human handoffs, evidence, cancellation and payment handoff; it depends on provider-neutral domain commands and existing treasury/audit/review/queue services, never FastAPI. Shared order rules are extracted to avoid circular imports. Supplier/auth routers and supplier console components are separated. Schema v2 copies v1 metadata without mutation; Alembic 0002 adds eight tables and review resolution fields. All mutating supplier commands lock treasury first and use DB uniqueness/idempotency as the second defence. No live connector or fake acceptance/payment behavior is introduced. See `docs/supplier-excel.md` and `docs/phase10-verification.md`.

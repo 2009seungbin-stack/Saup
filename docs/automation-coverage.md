@@ -18,3 +18,8 @@
 | Review/notification | Unified exception queue, audited acknowledgment, console notifications | Acknowledgment is not resolution; email/webhook delivery and escalation unfinished |
 
 `production_rate` is explicitly null/NOT_MEASURED. The demo result has `real_money_transferred=false`. An ordinary-transaction automation target of 95% requires a real observation cohort, all operational handoffs/interventions, supported live adapters and resolved production gates. Python line coverage must never be labelled an automation rate.
+
+
+## Phase 10 measurement infrastructure
+
+OperationalIntervention records category, actor, time and linked order/batch/supplier with a unique business key. Manual file creation/export/send, acknowledgement, payment approval, evidence recording/confirmation, supplier cancellation/recovery, claim response/refund approval and settlement reconciliation/cash confirmation are accounted for. Metrics return completed orders with/without recorded interventions plus per-category counts. `production_automation_percentage` is null; historical missing instrumentation is not evidence of zero human work. Defining an ordinary transaction cohort and externally verified completion remains future measurement work.

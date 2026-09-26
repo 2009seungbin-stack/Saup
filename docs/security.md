@@ -25,3 +25,10 @@ Fernet encryption keys must be backed up separately from database snapshots. Rot
 No SSO/MFA, external secret manager, production database role separation, append-only off-host audit storage, backup restoration drill, vulnerability/penetration review or installed frontend dependency audit has been completed. The local PostgreSQL password in Compose is deliberately a development-only value on an unexposed container network. Do not expose this Compose deployment publicly or put real customer data in the demo.
 
 Browser security headers include nosniff/frame denial/referrer restrictions. A strict application-specific CSP, TLS termination and production access-log redaction must be validated with a real Next build and browser tests; no CSP compliance claim is made.
+
+
+## Phase 10 boundary
+
+General supplier list/detail/trail endpoints are PII-minimal; they never serialize Order.pii_ciphertext, encrypted file/row bytes or customer address/phone. The file endpoint is an operator/admin PII export, audited per download and returned no-store. Frozen XLSX and row data use the existing application cipher at rest. Raw evidence screenshots are not uploaded: the console can compute a local hash and records a bounded reference/hash only. Free-form PII notes are deliberately omitted.
+
+Viewer cannot mutate workflow. Operator can batch/export/mark send/record supplier response and payment evidence; only admin can confirm payment or exceptional recovery. Existing session/CSRF/origin/rate-limit checks remain in the extracted auth router. New evidence, confirmation, acceptance and intervention records have ORM and migrated DB append-only protection. Reference hashes and safe typed codes are used in audits. Broader least-privilege DB roles, retention, key rotation and MFA remain deployment gates.

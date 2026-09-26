@@ -25,3 +25,8 @@ The demo's actual contribution calculation is `actual_settlement - supplier_paid
 ## Boundaries
 
 One final statement per fulfillment line. No multi-period installments, pooled statement allocation, fee reversals after full refunds, negative payouts/chargebacks, or late post-settlement refund automation. Those cases are manual/blocking until new models, reconciliation commands and tests exist. Never edit immutable journals to force agreement; add a documented correcting journal through a future audited reconciliation operation.
+
+
+## Phase 10 intervention accounting
+
+Manual statement reconciliation and cash confirmation now emit distinct deduplicated operational intervention categories with actor/time/order. Manual claim responses, refund approval and supplier recovery confirmation are also categorized. This instrumentation does not change the rule that supplier promises and settlement statements are not spendable bank cash, does not resolve settlement mismatches automatically, and does not imply a measured production automation rate.

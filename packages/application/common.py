@@ -30,6 +30,9 @@ def review(s, category: str, entity_id: str, details=None, key=None):
         if category != "JOB_DEAD_LETTER":
             enqueue(s, "notification.send", f"notify:{row.id}", {"category":category, "entity_id":entity_id, "idempotency_key":f"notify:{row.id}"})
     else:
+        if row.status == "RESOLVED":
+            audit(s, "REVIEW_REOPENED", row.id, old={"resolution_code": row.resolution_code}, reason=category)
+            row.resolution_code = row.resolved_by = row.resolved_at = None
         row.status = "OPEN"
     return row
 

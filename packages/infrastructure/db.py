@@ -2,7 +2,8 @@ from datetime import timezone
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
-from .models import AuditEvent, SupplierPriceHistory, Journal, Posting
+from .models import (AuditEvent, SupplierPriceHistory, Journal, Posting, SupplierOrderIntent,
+    SupplierBatchAcknowledgement, SupplierPaymentEvidence, SupplierPaymentConfirmation, OperationalIntervention)
 
 
 def database(url: str):
@@ -27,6 +28,7 @@ def immutable(*_):
     raise ValueError("APPEND_ONLY_RECORD")
 
 
-for cls in (AuditEvent, SupplierPriceHistory, Journal, Posting):
+for cls in (AuditEvent, SupplierPriceHistory, Journal, Posting, SupplierOrderIntent,
+            SupplierBatchAcknowledgement, SupplierPaymentEvidence, SupplierPaymentConfirmation, OperationalIntervention):
     event.listen(cls, "before_update", immutable)
     event.listen(cls, "before_delete", immutable)
