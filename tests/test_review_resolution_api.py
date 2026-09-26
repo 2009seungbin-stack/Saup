@@ -56,5 +56,7 @@ def test_recovery_http_admin_only_explicit_attestation_and_customer_hold(client,
     result=client.post(url,json=cmd,headers=headers);assert result.status_code==200,result.text
     assert result.json()['order_state']=='CANCEL_REQUESTED'
     customer=client.get('/v1/review-resolutions/'+result.json()['customer_review_id']).json()
-    assert not customer['eligible'] and customer['action'] is None
+    # Supplier recovery never resolves the customer side; Phase 11B needs separate external evidence.
+    assert customer['status']=='OPEN' and customer['stage']=='CUSTOMER_REFUND_EVIDENCE_MISSING'
+    assert customer['action']=='COMPLETE_MARKETPLACE_CANCELLATION_RECONCILIATION' and customer['history']==[]
     assert client.post(url,json=cmd,headers=headers).json()==result.json()

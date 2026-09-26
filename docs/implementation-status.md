@@ -1,8 +1,12 @@
-# Implementation status · Phase 10 base / Phase 11A branch · 2026-09-26
+# Implementation status · Phase 10 base / Phase 11A + 11B branch · 2026-09-26
 
 ## Current repository truth
 
 Phase 10 PR #2 was merged into main on 2026-09-26 at integration checkpoint `3983ca576d63eccd47d722457d1245c3e20c0fd6`. Its Git tree matches verified feature head `afe7a488af12e16bb284f9e9ea28f297359d9bbc`. See `phase10-main-merge.md` for separate pre-merge acceptance and post-merge CI evidence. This is a fixed integration checkpoint, not a promise that main never advances. Old empty-repository/ZIP-only claims and the foundation base `b1f1f15ac3b6a396fe9f14e549f11721f49bfb7f` are historical. Code and migration history outrank prose. No production deployment, live payment enablement or production readiness is claimed.
+
+## Phase 11B feature-branch increment
+
+Reconstructed from the Phase 11B specification (the earlier local patch never reached GitHub). Adds migration 0004 / schema_v4 (43 tables) with append-only MarketplaceRefundEvidence, MarketplaceCancellationStatement and MarketplaceCancellationReconciliation; three admin-only endpoints; a dedicated UI panel; a late-marketplace-line hold in ingest. It records external evidence only: no money movement, refund job or journal. Separate IMPLEMENTED / TESTED / NOT TESTED / BLOCKED / FUTURE status and per-SHA results: `phase11b-marketplace-cancellation.md` and `phase11b-verification.md`.
 
 ## Phase 11A feature-branch increment
 

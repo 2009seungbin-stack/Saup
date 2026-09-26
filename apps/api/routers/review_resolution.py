@@ -2,6 +2,8 @@
 from fastapi import APIRouter, Depends, Query
 from packages.domain.supplier_operations import Actor
 from packages.domain.review_resolution import CorrectionRequest, EvidenceCorrection, CancellationRecoveryConfirm
+from packages.domain.marketplace_cancellation import (
+    MarketplaceRefundReceipt, MarketplaceCancellationStatementInput, MarketplaceCancellationCompletion)
 
 
 def create_review_resolution_router(service, viewer, operator, admin):
@@ -29,5 +31,18 @@ def create_review_resolution_router(service, viewer, operator, admin):
     @router.post("/review-resolutions/{review_id}/confirm-supplier-recovery")
     def recovery(review_id: str, data: CancellationRecoveryConfirm, user=Depends(admin)):
         return service.confirm_recovery(review_id, data.model_dump(), actor(user))
+
+    # Phase 11B records EXTERNAL marketplace refund/statement evidence; none of these send money.
+    @router.post("/review-resolutions/{review_id}/record-marketplace-refund")
+    def marketplace_refund(review_id: str, data: MarketplaceRefundReceipt, user=Depends(admin)):
+        return service.record_marketplace_refund(review_id, data.model_dump(), actor(user))
+
+    @router.post("/review-resolutions/{review_id}/record-marketplace-statement")
+    def marketplace_statement(review_id: str, data: MarketplaceCancellationStatementInput, user=Depends(admin)):
+        return service.record_marketplace_statement(review_id, data.model_dump(), actor(user))
+
+    @router.post("/review-resolutions/{review_id}/complete-marketplace-cancellation")
+    def marketplace_complete(review_id: str, data: MarketplaceCancellationCompletion, user=Depends(admin)):
+        return service.complete_marketplace_cancellation(review_id, data.model_dump(), actor(user))
 
     return router

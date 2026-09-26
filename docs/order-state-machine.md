@@ -37,3 +37,7 @@ MANUAL_REVIEW→SUPPLIER_ORDERED is allowed only through guarded original-term r
 ## Phase 11A bounded review resolution
 
 Phase 11A supplier cancellation may advance FINANCIAL_REVIEW → FINANCIALLY_RECONCILED after an exact confirmed recovery. The supplier order remains CANCELLED, Payment remains SUCCEEDED, Reservation remains SPENT, and marketplace Order remains CANCEL_REQUESTED pending separate customer/marketplace reconciliation. No new marketplace Order transition or force-state command is added.
+
+## Phase 11B marketplace cancellation reconciliation
+
+Phase 11B uses the existing CANCEL_REQUESTED → CANCELLED edge only, and only through the admin completion command after external full-refund evidence and a zero seller-side final statement are recorded and every invariant is re-read under the treasury lock. Evidence recording alone never changes Order state. Payment stays SUCCEEDED, Reservation SPENT, SupplierOrder CANCELLED and SupplierCancellation FINANCIALLY_RECONCILED; the Order is not CLOSED or SETTLED. A new line of a marketplace order that already has refund evidence enters MANUAL_REVIEW (RECEIVED → MANUAL_REVIEW) and is not processed. No force-state command is added.

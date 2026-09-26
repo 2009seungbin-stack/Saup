@@ -2,8 +2,8 @@
 
 Every command locks treasury before any workflow read and executes atomically.
 Only payment-proof metadata can be corrected. Recovery records already-received
-funds for fully paid, pre-shipment supplier cancellations; customer settlement
-remains explicitly unresolved.
+funds for fully paid, pre-shipment supplier cancellations. The resulting customer
+review is reconciled only by the separate Phase 11B marketplace commands.
 """
 from sqlalchemy import select
 from packages.domain.errors import DomainError
@@ -19,17 +19,22 @@ from .common import lock_treasury, audit, review, execute_command
 from .finance import post
 from .payment_evidence import effective_evidence, reference_in_use
 from .supplier_operations import intervention, resolve_reviews
+from .marketplace_cancellation import (MarketplaceCancellationService, CUSTOMER, RESIDUAL, LATE_LINE,
+    ACTION as CUSTOMER_ACTION)
 
 CORRECTION = "SUPPLIER_PAYMENT_EVIDENCE_CORRECTION"
 FINANCIAL = "SUPPLIER_CANCELLATION_FINANCIAL_REVIEW"
-CUSTOMER = "MARKETPLACE_CANCELLATION_RECONCILIATION_REQUIRED"
-ACTIONS = {CORRECTION: "CORRECT_UNCONFIRMED_PAYMENT_EVIDENCE", FINANCIAL: "CONFIRM_SUPPLIER_CANCELLATION_RECOVERY"}
+ACTIONS = {CORRECTION: "CORRECT_UNCONFIRMED_PAYMENT_EVIDENCE", FINANCIAL: "CONFIRM_SUPPLIER_CANCELLATION_RECOVERY",
+           CUSTOMER: CUSTOMER_ACTION}
+# Listed for visibility only: these have no automated resolution command.
+LISTED = (CORRECTION, FINANCIAL, CUSTOMER, RESIDUAL, LATE_LINE)
 
 
 class ReviewResolutionService:
     def __init__(self, commerce):
         self.c, self.factory = commerce, commerce.factory
         self.ops = commerce.supplier_operations
+        self.marketplace = MarketplaceCancellationService(self)
 
     @staticmethod
     def get(s, model, identifier):
@@ -238,6 +243,10 @@ class ReviewResolutionService:
         if not detail:
             return result
         result.update({"eligible": False, "blocked_reason": None, "snapshot": None})
+        if row.category == CUSTOMER:
+            result.update(self.marketplace.detail(s, row))
+            result["history"] = self._history(s, row)
+            return result
         try:
             if row.status == "RESOLVED":
                 raise DomainError("REVIEW_ALREADY_RESOLVED")
@@ -256,14 +265,27 @@ class ReviewResolutionService:
             result["eligible"] = True
         except DomainError as exc:
             result["blocked_reason"] = exc.code
-        result["history"] = [{"id": x.id, "action": x.action, "actor": x.actor, "resolved_at": x.resolved_at,
+        result["history"] = self._history(s, row)
+        return result
+
+    @staticmethod
+    def _history(s, row):
+        return [{"id": x.id, "action": x.action, "actor": x.actor, "resolved_at": x.resolved_at,
             "result": x.result} for x in s.scalars(select(ReviewResolution).where(ReviewResolution.review_id == row.id)
             .order_by(ReviewResolution.created_at, ReviewResolution.id))]
-        return result
+
+    def record_marketplace_refund(self, review_id, raw, actor):
+        return self.marketplace.record_refund(review_id, raw, actor)
+
+    def record_marketplace_statement(self, review_id, raw, actor):
+        return self.marketplace.record_statement(review_id, raw, actor)
+
+    def complete_marketplace_cancellation(self, review_id, raw, actor):
+        return self.marketplace.complete(review_id, raw, actor)
 
     def list_reviews(self, limit=100, offset=0):
         with self.factory() as s:
-            return [self.view(s, x) for x in s.scalars(select(Review).where(Review.category.in_([CORRECTION, FINANCIAL, CUSTOMER]))
+            return [self.view(s, x) for x in s.scalars(select(Review).where(Review.category.in_(LISTED))
                 .order_by(Review.created_at.desc(), Review.id).limit(limit).offset(offset))]
 
     def get_review(self, review_id):

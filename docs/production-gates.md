@@ -34,3 +34,7 @@ Coupang, Temu and AliExpress account/API approval and official contracts, author
 ## Phase 11A bounded review resolution
 
 Phase 11A requires migration 0003 and coordinated application version rollout: old binaries do not understand evidence correction holds. Nonempty new history or correction reviews block downgrade. Partial/changed-allocation/post-shipment recoveries and customer refund completion remain blocked. See phase11-review-resolution.md; only current-SHA executed artifacts qualify as verification.
+
+## Phase 11B marketplace cancellation reconciliation
+
+Requires migration 0004 and a coordinated rollout of API/worker/web: older binaries neither understand the late-line hold nor the new reviews. Downgrade is refused when Phase 11B rows or residual/late-line reviews exist. Gates still open: real marketplace refund/statement formats and official API access, multi-line parent orders, partial/fee-adjusted cancellations, post-shipment cancellations, evidence storage/retention/key rotation, backup/restore drills. Only current-SHA executed artifacts qualify as verification.

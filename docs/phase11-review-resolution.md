@@ -1,5 +1,9 @@
 # Phase 11A — bounded Review Resolution Engine
 
+> Follow-up: the customer/marketplace reconciliation described below as unsupported is implemented, for the narrow
+> single-line, full-refund, zero-seller-settlement case only, by Phase 11B (`phase11b-marketplace-cancellation.md`).
+> The Phase 11A text below is kept as the historical record of that increment.
+
 Base: main `77f5589c3ed4473cc8bca315e9e416cde162e7a0`, tree `97eef1d5cdde25405c7fe02ee715672ceb07e977` (2026-09-26).
 This is an additive feature-branch increment, not a statement that Phase 11 is merged, deployed or production-ready. Consult the PR and the exact head SHA's Actions artifacts for executed results. Phase 10's historical test counts are not results for this source.
 

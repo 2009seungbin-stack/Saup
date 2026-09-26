@@ -1,12 +1,16 @@
 # Saup · 위탁판매 운영 기반
 
-**Phase 10 운영 기반 + Phase 11A 검토 해결 개발 브랜치. 실제 마켓·실결제 커넥터는 미승인 상태입니다.**
+**Phase 10 운영 기반 + Phase 11A 검토 해결 + Phase 11B 마켓 고객 취소 대사. 실제 마켓·실결제 커넥터는 미승인 상태입니다.**
 
 Python 3.12+, FastAPI, SQLAlchemy 2, Alembic, PostgreSQL, Redis와 Next.js 운영 콘솔을 사용합니다. 기존 아키텍처를 유지하면서 Excel 공급사의 발주 묶음·전송·접수·증빙 지급·배송 대기를 연결합니다. PostgreSQL이 운영 데이터의 기준이며 Excel·메신저·운영자 메모는 외부 증거입니다.
 
 ## Phase 11A 개발 범위
 
 현재 변경은 미확정 지급 증빙의 이력 보존 정정과 지급 후·배송 전 공급사 전액 환급 확인을 추가합니다. 고객 환불·주문 종료는 별도 검토로 남습니다. 병합·CI 상태는 해당 PR/소스 SHA를 확인하며, 범위와 제한은 `docs/phase11-review-resolution.md`를 참고하세요.
+
+## Phase 11B 개발 범위
+
+공급사 전액 환급(11A) 이후, 마켓이 이미 완료한 고객 전액 환불 증빙과 0원 최종 취소 정산서를 관리자만 기록하고, 모든 불변식을 잠금 아래 재확인한 뒤에만 주문을 `CANCEL_REQUESTED → CANCELLED`로 바꿉니다. 송금·환불 작업·원장 이동·재고 복원은 하지 않습니다. 판매자 잔여 정산(지급·차감·수수료·미결 잔액)이 있으면 증빙은 보존하되 자동 완료를 차단합니다. 단일 주문행만 지원합니다. 상세는 `docs/phase11b-marketplace-cancellation.md`를 참고하세요.
 
 ## 소스와 검증의 기준
 
@@ -65,6 +69,9 @@ python -m scripts.demo_supplier_operations --output reports/phase10/synthetic.js
 | `packages/domain/supplier_operations.py` | 공급사 상태 전이와 엄격한 입력 계약 |
 | `packages/infrastructure/schema_v3.py` | 동결된 v1/v2 위에 추가한 40개 런타임 테이블 |
 | `migrations/versions/0003_review_resolution.py` | 증빙 정정·확인 연결·환급·해결 이력 4개 테이블 |
+| `packages/infrastructure/schema_v4.py` | 동결된 v1/v2/v3 위에 추가한 43개 런타임 테이블 |
+| `migrations/versions/0004_marketplace_cancellation.py` | 마켓 고객 환불 증빙·최종 정산서·취소 대사 3개 append-only 테이블 |
+| `packages/application/marketplace_cancellation.py` | 외부 마켓 취소 대사(송금 없음) 명령과 불변식 재검증 |
 | `migrations/versions/0002_supplier_operations.py` | 신규 8개 테이블, Review 해결 이력, 기존 Excel 주문 격리 |
 | `apps/api/routers/` | 분리된 인증 및 공급사 운영 라우터 |
 | `apps/web/components/suppliers/` | 배치·접수·지급 증빙 운영 화면 |

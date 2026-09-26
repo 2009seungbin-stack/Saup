@@ -1,4 +1,10 @@
-# Saup 인수인계 · Phase 10 기반 / Phase 11A 개발
+# Saup 인수인계 · Phase 10 기반 / Phase 11A·11B 개발
+
+## Phase 11B 후속 작업 · 2026-09-26
+
+Phase 11A head `713929a46f81bc566f3d753cdce0877a60d64aac` 위에 마켓 고객 취소 대사를 추가합니다. 다른 컴퓨터의 Phase 11B 패치는 GitHub에 올라가지 않았고 이 컴퓨터에도 없었으므로, 명세를 기준으로 재구성했습니다. 이전 로컬 결과(Python 3.13.5, 291개)는 이 소스의 증거가 아닙니다.
+
+migration 0004/schema_v4(43개 테이블)가 append-only `marketplace_refund_evidence`, `marketplace_cancellation_statements`, `marketplace_cancellation_reconciliations`를 추가합니다. 관리자만 (1) 마켓이 이미 완료한 고객 전액 환불 증빙, (2) 모든 금액을 명시한 최종 취소 정산서를 기록하고, (3) 완료 명령이 잠금 아래 모든 불변식을 다시 읽은 뒤에만 주문을 `CANCEL_REQUESTED → CANCELLED`로 바꿉니다. 지급은 SUCCEEDED, 예약은 SPENT, 공급사 주문은 CANCELLED, 공급사 취소는 FINANCIALLY_RECONCILED로 유지합니다. 송금·환불 작업·원장 이동·재고 복원은 없습니다(배송 전에는 매출채권이 인식되지 않았기 때문). 판매자 잔여 정산이 있으면 증빙을 보존하고 별도 검토를 열며 자동 완료를 차단합니다. 같은 마켓 주문의 다른 주문행은 fail-closed로 보류합니다. 상세와 IMPLEMENTED/TESTED/NOT TESTED/BLOCKED/FUTURE 구분은 `docs/phase11b-marketplace-cancellation.md`, SHA별 실행 결과는 `docs/phase11b-verification.md`를 기준으로 하세요.
 
 갱신 기준: 2026-09-26 병합 후. 저장소 `2009seungbin-stack/Saup`, 기본 브랜치 `main`. Phase 10 기능 PR #2는 병합되었습니다.
 

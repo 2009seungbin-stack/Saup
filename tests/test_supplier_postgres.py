@@ -40,6 +40,7 @@ def pg_excel_env():
                 importlib.import_module('migrations.versions.0001_initial').upgrade()
                 importlib.import_module('migrations.versions.0002_supplier_operations').upgrade()
                 importlib.import_module('migrations.versions.0003_review_resolution').upgrade()
+                importlib.import_module('migrations.versions.0004_marketplace_cancellation').upgrade()
         settings=Settings(_env_file=None,app_mode='test',database_url=url,
             pii_encryption_key=Fernet.generate_key().decode(),admin_password='synthetic-integration-password')
         ids=seed(settings,factory,demo=True);commerce=Commerce(settings,factory)

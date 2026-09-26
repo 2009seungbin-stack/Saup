@@ -4,7 +4,8 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 from .models import (AuditEvent, SupplierPriceHistory, Journal, Posting, SupplierOrderIntent,
     SupplierBatchAcknowledgement, SupplierPaymentEvidence, SupplierPaymentConfirmation, OperationalIntervention,
-    SupplierEvidenceRevision, SupplierEvidenceConfirmationBinding, SupplierCancellationRecovery, ReviewResolution)
+    SupplierEvidenceRevision, SupplierEvidenceConfirmationBinding, SupplierCancellationRecovery, ReviewResolution,
+    MarketplaceRefundEvidence, MarketplaceCancellationStatement, MarketplaceCancellationReconciliation)
 
 
 def database(url: str):
@@ -31,6 +32,7 @@ def immutable(*_):
 
 for cls in (AuditEvent, SupplierPriceHistory, Journal, Posting, SupplierOrderIntent,
             SupplierBatchAcknowledgement, SupplierPaymentEvidence, SupplierPaymentConfirmation, OperationalIntervention,
-    SupplierEvidenceRevision, SupplierEvidenceConfirmationBinding, SupplierCancellationRecovery, ReviewResolution):
+    SupplierEvidenceRevision, SupplierEvidenceConfirmationBinding, SupplierCancellationRecovery, ReviewResolution,
+    MarketplaceRefundEvidence, MarketplaceCancellationStatement, MarketplaceCancellationReconciliation):
     event.listen(cls, "before_update", immutable)
     event.listen(cls, "before_delete", immutable)

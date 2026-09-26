@@ -8,7 +8,7 @@ from packages.domain.schemas import OrderInput, Address, ShipmentRow
 from packages.domain.pricing import margin, fee_for
 from packages.domain.state_machine import validate_transition, EARLY_CANCEL
 from packages.infrastructure.models import (Order, Supplier, SupplierProduct, Product, MarketplaceListing,
-    SupplierOrder, Reservation, Payment, Shipment, Claim)
+    SupplierOrder, Reservation, Payment, Shipment, Claim, MarketplaceRefundEvidence)
 from packages.infrastructure.schema_v1 import uid
 from packages.infrastructure.db import aware
 from packages.infrastructure.security import Cipher, fingerprint
@@ -50,6 +50,15 @@ class Commerce:
                 hold_until=self.clock() + timedelta(seconds=self.settings.order_hold_seconds))
             s.add(order); s.flush()
             audit(s, "ORDER_RECEIVED", order.id, correlation_id=order.correlation_id)
+            # A full-refund/final-cancellation record was single-line. A new line of the
+            # same marketplace order invalidates that assumption: fail closed, never fulfil.
+            cancelled = s.scalar(select(MarketplaceRefundEvidence.order_id).where(
+                MarketplaceRefundEvidence.marketplace == order.marketplace,
+                MarketplaceRefundEvidence.external_order_id == order.external_id))
+            if cancelled:
+                transition(s, order, "MANUAL_REVIEW", "MARKETPLACE_LINE_AFTER_CANCELLATION_EVIDENCE")
+                review(s, "MARKETPLACE_LINE_AFTER_CANCELLATION_EVIDENCE", order.id, {"cancelled_order_id": cancelled})
+                return {"id": order.id, "state": order.state, "duplicate": False}
             enqueue(s, "order.process", f"order:{order.id}", {"order_id": order.id}, at=order.hold_until)
             return {"id": order.id, "state": order.state, "duplicate": False}
 
