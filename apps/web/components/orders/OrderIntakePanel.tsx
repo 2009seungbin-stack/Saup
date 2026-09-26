@@ -84,7 +84,7 @@ export default function OrderIntakePanel({role,onSuppliers}:{role:string;onSuppl
     <p className="notice">파일을 등록해도 발주하거나 송금하지 않습니다. 판매자 원본을 확인한 후 기존 재고·마진·자금 검증을 진행합니다.</p>
     {role!=='viewer'&&<>
       <form className="supplier-form" onSubmit={previewFile}>
-        <div className="toolbar"><label>주문 마켓<select value={market} disabled={busy} onChange={e=>{setMarket(e.target.value);reset();}}>
+        <div className="toolbar"><label>주문 마켓<select aria-label="주문 마켓" value={market} disabled={busy} onChange={e=>{setMarket(e.target.value);reset();}}>
           <option value="coupang">쿠팡</option><option value="temu">테무</option><option value="aliexpress">알리익스프레스</option></select></label>
           <a className="button" href="/api/v1/order-imports/template">빈 주문 양식</a>
           <a className="button" href={`/api/v1/order-imports/catalog?marketplace=${market}`}>판매상품ID 목록</a></div>

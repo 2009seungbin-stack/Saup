@@ -99,3 +99,19 @@ not implemented. Hashes identify evidence but do not independently verify it.
 Files and customer data still require authorised processing/retention policies.
 Treasury-lock contention and existing single-line cancellation restrictions remain.
 The separately preserved Phase 12 draft is not included in this patch.
+
+## First current-source execution and accessibility fix
+
+Initial remote head `a4dfa1794c38ad970bcf3ca37514c7d9bf749ac1`: normal CI
+`36254267034` passed Python 3.12.14 compile, 379 ordinary / 14 real PostgreSQL /
+2 real Redis cases, both synthetic flows and npm ci/typecheck/build. Downloaded
+backend/frontend artifact hashes, JUnit and source SHA were checked.
+
+Separate acceptance `36254267115` built and started real containers but returned
+**11 passed / 2 failed**. The new select's implicit label included its option text
+and did not match the exact accessible name used by the UI test. The new order
+scenario stopped before import; the subsequent viewer-history scenario then had
+no imported history. All three restart/assertion steps were skipped, not passed.
+The select now explicitly declares its accessible name. No financial check,
+authentication rule or test assertion is removed. The updated source requires
+fresh normal and browser runs; earlier success does not certify this follow-up.
