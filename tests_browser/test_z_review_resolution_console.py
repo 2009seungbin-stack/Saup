@@ -64,7 +64,9 @@ def test_evidence_correction_then_cancelled_supplier_recovery_ui(pages,fixture_d
     assert observed['payment_status']=='SUCCEEDED' and observed['state']=='CANCEL_REQUESTED' and observed['reservation_status']=='SPENT'
     assert observed['shipment_id'] is None and after['balanced_journals']
     admin.get_by_role('button',name=result['customer_review_id'],exact=True).click()
-    expect(admin.get_by_text('현재 실행 불가: NO_AUTOMATED_RESOLUTION_FOR_CATEGORY',exact=True)).to_be_visible()
+    # Supplier recovery never resolves the customer side; Phase 11B evidence is still required.
+    expect(admin.locator('[data-stage="CUSTOMER_REFUND_EVIDENCE_MISSING"]')).to_be_visible()
+    expect(admin.get_by_text('검토 상태: OPEN',exact=True)).to_be_visible()
     (REPORTS/'phase11-review-resolution.json').write_text(json.dumps({'result':result,'before':before,'after':after},indent=2))
 
 

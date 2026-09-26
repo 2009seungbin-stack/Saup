@@ -19,7 +19,8 @@ ROOT=Path(__file__).resolve().parents[1]
 
 
 def capture(command):
-    result=subprocess.run(command,cwd=ROOT,text=True,capture_output=True,check=False)
+    # Explicit UTF-8: Korean docs in git diff are undecodable with a Windows ANSI codepage.
+    result=subprocess.run(command,cwd=ROOT,text=True,encoding='utf-8',errors='replace',capture_output=True,check=False)
     return result.stdout.strip() if result.returncode==0 else None
 
 

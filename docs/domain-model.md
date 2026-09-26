@@ -41,3 +41,7 @@ Migration 0002 never edits frozen schema_v1 or 0001. Existing Excel supplier ord
 ## Phase 11A bounded review resolution
 
 Phase 11A raises runtime metadata to 40 tables and adds four immutable history entities in schema_v3/migration 0003: SupplierEvidenceRevision, SupplierEvidenceConfirmationBinding, SupplierCancellationRecovery and ReviewResolution. Old schemas and journals remain unchanged. See phase11-review-resolution.md.
+
+## Phase 11B marketplace cancellation reconciliation
+
+schema_v4/migration 0004 raise runtime metadata to 43 tables with three append-only entities: MarketplaceRefundEvidence (external full customer refund receipt, bound to one review, order, supplier recovery and snapshot hash), MarketplaceCancellationStatement (explicit customer refund, seller payout, seller debit, retained fee and outstanding balance; classified ZERO_SELLER_SETTLEMENT or UNSUPPORTED_RESIDUAL_SETTLEMENT) and MarketplaceCancellationReconciliation (the invariant-checked CANCEL_REQUESTED → CANCELLED completion). The customer refund basis is `gross_sale − discount`, never supplier cost. The model is fulfillment-line oriented; a parent marketplace order with several lines is not modelled and fails closed. See phase11b-marketplace-cancellation.md.

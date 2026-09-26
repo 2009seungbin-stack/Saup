@@ -52,3 +52,7 @@ The acceptance workflow compares durable PostgreSQL order/payment/evidence/shipm
 ## Phase 11A bounded review resolution
 
 Phase 11A suites: test_review_resolution.py, test_review_resolution_api.py, test_review_resolution_postgres.py, tests_browser/test_z_review_resolution_console.py. Verify correction/confirmation races, refund receipt dedupe, append-only history, exact allocations, rollback and customer hold. The acceptance restart snapshot includes new resolution history and schema 0003; do not reuse Phase 10 test counts.
+
+## Phase 11B marketplace cancellation reconciliation
+
+Suites: tests/test_marketplace_cancellation.py, tests/test_marketplace_cancellation_api.py, tests/test_marketplace_cancellation_postgres.py (real PostgreSQL only) and tests_browser/test_zz_marketplace_cancellation_console.py (real Chromium). They cover refund/statement/completion replay and conflicts, every rejection listed in phase11b-marketplace-cancellation.md, re-checked invariants after out-of-band changes, residual blocks, late-line holds, append-only ORM/SQL, 0001→0004 migration chain and populated-downgrade refusal, RBAC/CSRF/Origin/PII, and four PostgreSQL race families. PostgreSQL fixtures migrate through 0004; the acceptance snapshot requires 0004, includes the three new tables and requires at least 11 browser cases. Changed 11A assertion: after supplier recovery the customer review reports CUSTOMER_REFUND_EVIDENCE_MISSING (still OPEN). Do not reuse 11A counts.

@@ -41,3 +41,7 @@ Proof or a completed/ambiguous payment means money exposure during cancellation.
 ## Phase 11A bounded review resolution
 
 Phase 11A correction holds block manual confirmation. Only unconfirmed proof reference/hash can be versioned; every later confirmation binds the effective revision. Full pre-shipment supplier recovery requires actual receipt evidence, original payment journal and exact supplier/bank allocation; it never marks the customer refunded. Shared receipt namespace and unique recovery hash prevent duplicate credits. See phase11-review-resolution.md for unsupported cases.
+
+## Phase 11B marketplace cancellation reconciliation
+
+Phase 11B moves no money: no bank/marketplace call, refund job, payment mutation, reservation release or journal. It records that the marketplace already refunded the customer in full; that record is not proof of any seller-side cash and supplier receipts/outgoing payment references cannot be reused as customer refund evidence. Because receivable is recognized only at delivery, the pre-shipment path posts nothing; posting CUSTOMER_REFUND would make MARKETPLACE_RECEIVABLE negative. Orders already carrying sale, refund or settlement accounting are rejected. Nonzero seller payout, debit, retained fee or outstanding balance blocks completion and opens an explicit review. See phase11b-marketplace-cancellation.md.

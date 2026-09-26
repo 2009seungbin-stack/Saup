@@ -17,7 +17,10 @@ from packages.infrastructure.models import (
     Payment, SupplierPaymentEvidence, SupplierPaymentConfirmation, Shipment, Job,
     Reservation, AuditEvent, Journal, Posting, Account, ImportBatch, SupplierEvidenceRevision,
     SupplierEvidenceConfirmationBinding, SupplierCancellationRecovery, ReviewResolution,
+    MarketplaceRefundEvidence, MarketplaceCancellationStatement, MarketplaceCancellationReconciliation,
 )
+RESOLUTION_MODELS = (SupplierEvidenceRevision, SupplierEvidenceConfirmationBinding, SupplierCancellationRecovery,
+    ReviewResolution, MarketplaceRefundEvidence, MarketplaceCancellationStatement, MarketplaceCancellationReconciliation)
 from packages.infrastructure.security import hash_password
 from packages.application.common import lock_treasury, audit
 
@@ -63,15 +66,18 @@ def snapshot(factory):
         result = {'synthetic_only': True, 'schema_revision': s.scalar(text('SELECT version_num FROM alembic_version')),
                   'accounts': {a.code: a.balance for a in s.scalars(select(Account))}, 'orders': {}, 'counts': {}}
         for cls in (Order, SupplierOrder, Payment, SupplierPaymentEvidence, SupplierPaymentConfirmation, Shipment, ImportBatch,
-                SupplierEvidenceRevision, SupplierEvidenceConfirmationBinding, SupplierCancellationRecovery, ReviewResolution):
+                *RESOLUTION_MODELS):
             result['counts'][cls.__table__.name] = s.scalar(select(func.count()).select_from(cls))
         safe_fields = {'id','evidence_id','review_id','supersedes_id','revision','confirmation_id','revision_id',
                        'cancellation_id','payment_id','supplier_id','journal_id','amount','bank_amount',
-                       'deposit_amount','payload_hash','actor','action'}
+                       'deposit_amount','payload_hash','actor','action','order_id','supplier_recovery_id',
+                       'refund_evidence_id','statement_id','customer_refund_amount','seller_payout_amount',
+                       'seller_debit_amount','retained_fee_amount','outstanding_balance','classification',
+                       'snapshot_hash','order_state_before','order_state_after'}
         result['resolution_records'] = {cls.__table__.name: [
             {column.name: getattr(row, column.name) for column in cls.__table__.columns if column.name in safe_fields}
             for row in s.scalars(select(cls).order_by(cls.id))]
-            for cls in (SupplierEvidenceRevision, SupplierEvidenceConfirmationBinding, SupplierCancellationRecovery, ReviewResolution)}
+            for cls in RESOLUTION_MODELS}
         for order in s.scalars(select(Order).order_by(Order.id)):
             so = s.scalar(select(SupplierOrder).where(SupplierOrder.order_id == order.id))
             p = s.scalar(select(Payment).where(Payment.order_id == order.id))
@@ -81,6 +87,8 @@ def snapshot(factory):
                     if shipment and j.payload.get('shipment_id') == shipment.id]
             evidence = s.scalar(select(SupplierPaymentEvidence).where(SupplierPaymentEvidence.payment_id == p.id)) if p else None
             confirmation = s.scalar(select(SupplierPaymentConfirmation).where(SupplierPaymentConfirmation.payment_id == p.id)) if p else None
+            reconciled = s.scalar(select(MarketplaceCancellationReconciliation.id).where(
+                MarketplaceCancellationReconciliation.order_id == order.id))
             result['orders'][order.id] = {
                 'state': order.state, 'supplier_state': so.status if so else None,
                 'payment_id': p.id if p else None, 'payment_status': p.status if p else None,
@@ -91,16 +99,18 @@ def snapshot(factory):
                 'shipment_jobs': len(jobs), 'shipment_job_statuses': [j.status for j in jobs],
                 'reservation_status': reservation.status if reservation else None,
                 'human_interventions': order.human_interventions,
+                'marketplace_reconciliation_id': reconciled,
             }
         unbalanced = s.execute(select(Posting.journal_id).group_by(Posting.journal_id).having(func.sum(Posting.delta) != 0)).all()
         result['balanced_journals'] = not unbalanced
         result['journal_count'] = s.scalar(select(func.count()).select_from(Journal))
+        result['job_counts'] = dict(s.execute(select(Job.kind, func.count()).group_by(Job.kind)).all())
         result['audit_counts'] = dict(s.execute(select(AuditEvent.event, func.count()).group_by(AuditEvent.event)).all())
         return result
 
 
 def verify_completed(result):
-    if result['schema_revision'] != '0003' or not result['balanced_journals']:
+    if result['schema_revision'] != '0004' or not result['balanced_journals']:
         raise RuntimeError('ACCEPTANCE_SCHEMA_OR_LEDGER_INVARIANT_FAILED')
     shipped = [o for o in result['orders'].values() if o['supplier_state'] == 'SHIPPED']
     if not shipped:
@@ -112,6 +122,12 @@ def verify_completed(result):
     for order in result['orders'].values():
         if order['supplier_state'] in {'REJECTED', 'MANUAL_REVIEW'} and order['payment_id']:
             raise RuntimeError('ACCEPTANCE_BLOCKED_LINE_CREATED_PAYMENT')
+        # A reconciled external cancellation closes only the marketplace Order; money history is untouched.
+        if order.get('marketplace_reconciliation_id') and not (
+                order['state'] == 'CANCELLED' and order['supplier_state'] == 'CANCELLED'
+                and order['payment_status'] == 'SUCCEEDED' and order['reservation_status'] == 'SPENT'
+                and order['shipment_id'] is None):
+            raise RuntimeError('ACCEPTANCE_MARKETPLACE_RECONCILIATION_INCONSISTENT')
 
 
 def main():

@@ -70,7 +70,7 @@ def test_acceptance_seed_refuses_existing_orders(env, order_input):
 
 
 def completed():
-    return {'schema_revision': '0003', 'balanced_journals': True, 'orders': {'one': {
+    return {'schema_revision': '0004', 'balanced_journals': True, 'orders': {'one': {
         'supplier_state':'SHIPPED', 'payment_id':'payment-one', 'payment_status':'SUCCEEDED',
         'marketplace_synced':True, 'shipment_jobs':1, 'shipment_job_statuses':['DONE']}}}
 
@@ -92,3 +92,25 @@ def test_acceptance_verifier_requires_ledger_balance():
 
 def test_acceptance_verifier_accepts_completed_synthetic_effects():
     verify_completed(completed())
+
+
+def reconciled_order(**changes):
+    return {'state':'CANCELLED', 'supplier_state':'CANCELLED', 'payment_id':'payment-two', 'payment_status':'SUCCEEDED',
+        'reservation_status':'SPENT', 'shipment_id':None, 'marketplace_synced':False, 'shipment_jobs':0,
+        'shipment_job_statuses':[], 'marketplace_reconciliation_id':'reconciliation-one', **changes}
+
+
+@pytest.mark.parametrize('changes', [
+    {'state':'CANCEL_REQUESTED'}, {'payment_status':'CANCELLED'}, {'reservation_status':'RELEASED'},
+    {'shipment_id':'shipment-two'}, {'supplier_state':'SHIPPED'},
+])
+def test_acceptance_verifier_rejects_inconsistent_marketplace_reconciliation(changes):
+    result = deepcopy(completed()); result['orders']['two'] = reconciled_order(**changes)
+    with pytest.raises(RuntimeError, match='RECONCILIATION_INCONSISTENT|SUPPLIER_TRANSACTION|COMPLETED_EFFECTS'):
+        verify_completed(result)
+
+
+def test_acceptance_verifier_accepts_reconciled_cancellation_and_requires_0004():
+    result = deepcopy(completed()); result['orders']['two'] = reconciled_order(); verify_completed(result)
+    result['schema_revision'] = '0003'
+    with pytest.raises(RuntimeError, match='SCHEMA_OR_LEDGER'):verify_completed(result)
