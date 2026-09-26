@@ -6,6 +6,7 @@ import OrderIntakePanel from '../components/orders/OrderIntakePanel';
 import ReviewResolutionPanel from '../components/reviews/ReviewResolutionPanel';
 import SetupPanel from '../components/operations/SetupPanel';
 import WorkPanel from '../components/operations/WorkPanel';
+import CreativeStudio from '../components/creative/CreativeStudio';
 
 type User = {username:string;role:string;mode:string};
 type Catalog = {id:string;title:string;sku:string;price:number;cost:number;shipping:number;stock:number|null;marketplace:string;desired_state:string;remote_state:string;safe_additional_order_capacity:number};
@@ -51,8 +52,9 @@ export default function Dashboard() {
     {error&&<div className="error" role="alert">{error}<button onClick={()=>setError('')}>닫기</button></div>}
     <section className="stats" aria-label="오늘의 운영 지표"><article><label>총 주문액</label><strong>{won(overview?.today.gross_sales??0)}</strong><small>주문 {overview?.today.orders??0}건</small></article><article><label>예상 공헌이익</label><strong>{won(overview?.today.expected_contribution??0)}</strong><small>확정 손익 아님 · 클레임 조정 전</small></article><article><label>가용 은행 자금</label><strong>{won(overview?.cash.available_cash??0)}</strong><small>예치금은 공급사별 별도 계산</small></article><article><label>운영 예외</label><strong>{overview?.risk.open_reviews??0}<em>건</em></strong><small>판매중지 {overview?.risk.paused_listings??0} · 작업 실패 {overview?.risk.dead_jobs??0}</small></article></section>
     <section className="cashbar"><span>은행 잔액 <b>{won(overview?.cash.bank_balance??0)}</b></span><span>발주 예약 <b>{won(overview?.cash.bank_committed??0)}</b></span><span>환불 준비금 <b>{won(overview?.cash.refund_reserve??0)}</b></span><span>안전 준비금 <b>{won(overview?.cash.safety_reserve??0)}</b></span><span title="미정산 매출은 사용 가능한 현금이 아닙니다.">미정산 채권 <b>{won(overview?.cash.marketplace_receivable??0)}</b></span></section>
-    <nav aria-label="운영 메뉴">{['초기 설정','상품','주문','주문 가져오기','공급사 운영','외부 처리 확인','클레임','정산','검토 큐','검토 해결','결제','파일','연동'].map(t=><button key={t} className={tab===t?'selected':''} onClick={()=>setTab(t)}>{t}{t==='검토 큐'&&reviews.length>0&&<i>{reviews.length}</i>}</button>)}</nav>
+    <nav aria-label="운영 메뉴">{['초기 설정','상품','상품 제작','주문','주문 가져오기','공급사 운영','외부 처리 확인','클레임','정산','검토 큐','검토 해결','결제','파일','연동'].map(t=><button key={t} className={tab===t?'selected':''} onClick={()=>setTab(t)}>{t}{t==='검토 큐'&&reviews.length>0&&<i>{reviews.length}</i>}</button>)}</nav>
     <section className="panel">
+      <div hidden={tab!=='상품 제작'}><CreativeStudio products={catalog} role={user.role}/></div>
       {tab==='초기 설정'&&<SetupPanel role={user.role} onFiles={()=>setTab('파일')} onIntake={()=>setTab('주문 가져오기')}/>}
       {(tab==='외부 처리 확인'||tab==='클레임'||tab==='정산')&&<WorkPanel role={user.role} section={tab}/>}
       {tab==='주문 가져오기'&&<OrderIntakePanel role={user.role} onSuppliers={()=>setTab('공급사 운영')}/>}
