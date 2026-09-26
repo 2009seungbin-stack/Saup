@@ -108,7 +108,7 @@ def tracking_file(so_id, external_id, tracking):
 def import_ui(page, profile_id, content):
     page.get_by_role('navigation', name='운영 메뉴').get_by_role('button', name='파일', exact=True).click()
     # The Files panel has one profile selector.
-    page.locator('.panel select').select_option(profile_id)
+    page.get_by_role('combobox', name='공급사 엑셀 프로필', exact=True).select_option(profile_id)
     with page.expect_response(lambda r: f'/v1/imports/{profile_id}/shipment' in r.url and r.request.method == 'POST') as response:
         page.get_by_label('송장 가져오기', exact=True).set_input_files({'name':'synthetic-tracking.xlsx',
             'mimeType':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','buffer':content})
