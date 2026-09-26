@@ -1,5 +1,16 @@
 # Saup 인수인계 · Phase 10 기반 / Phase 11A·11B 개발
 
+## Functional-closure development checkpoint
+
+This change starts from verified main `c7fd4f0` and adds operational XLSX order
+preview/import plus explicitly verified manual-source validation. It reuses the
+existing supplier workflow without new tables/migrations. It is **not** a full
+Saup 1.0 completion or live marketplace/payment enablement. The unmerged Phase 12A
+draft remains separate. Scope: `docs/release-closure.md`; operation and tests:
+`docs/order-intake.md`. For this source use its exact commit/Actions artifacts;
+historical counts below are not current-source verification.
+
+
 ## Phase 11B 후속 작업 · 2026-09-26
 
 Phase 11A head `713929a46f81bc566f3d753cdce0877a60d64aac` 위에 마켓 고객 취소 대사를 추가합니다. 다른 컴퓨터의 Phase 11B 패치는 GitHub에 올라가지 않았고 이 컴퓨터에도 없었으므로, 명세를 기준으로 재구성했습니다. 이전 로컬 결과(Python 3.13.5, 291개)는 이 소스의 증거가 아닙니다.

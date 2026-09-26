@@ -13,7 +13,7 @@ from sqlalchemy.engine import make_url
 from packages.infrastructure.settings import Settings
 from packages.infrastructure.db import database
 from packages.infrastructure.models import (
-    User, Supplier, SupplierExcelProfile, MarketplaceListing, Order, SupplierOrder,
+    Command, User, Supplier, SupplierExcelProfile, MarketplaceListing, Order, SupplierOrder,
     Payment, SupplierPaymentEvidence, SupplierPaymentConfirmation, Shipment, Job,
     Reservation, AuditEvent, Journal, Posting, Account, ImportBatch, SupplierEvidenceRevision,
     SupplierEvidenceConfirmationBinding, SupplierCancellationRecovery, ReviewResolution,
@@ -78,6 +78,9 @@ def snapshot(factory):
             {column.name: getattr(row, column.name) for column in cls.__table__.columns if column.name in safe_fields}
             for row in s.scalars(select(cls).order_by(cls.id))]
             for cls in RESOLUTION_MODELS}
+        result['order_intake_records'] = [{"id": row.id, "scope": row.scope,
+            "payload_hash": row.payload_hash, "result": row.result} for row in s.scalars(select(Command)
+            .where(Command.scope.in_(["orders.file.commit", "orders.file.verify"])).order_by(Command.id))]
         for order in s.scalars(select(Order).order_by(Order.id)):
             so = s.scalar(select(SupplierOrder).where(SupplierOrder.order_id == order.id))
             p = s.scalar(select(Payment).where(Payment.order_id == order.id))

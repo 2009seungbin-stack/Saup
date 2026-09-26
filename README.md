@@ -1,5 +1,16 @@
 # Saup · 위탁판매 운영 기반
 
+## Functional-closure development checkpoint
+
+This change starts from verified main `c7fd4f0` and adds operational XLSX order
+preview/import plus explicitly verified manual-source validation. It reuses the
+existing supplier workflow without new tables/migrations. It is **not** a full
+Saup 1.0 completion or live marketplace/payment enablement. The unmerged Phase 12A
+draft remains separate. Scope: `docs/release-closure.md`; operation and tests:
+`docs/order-intake.md`. For this source use its exact commit/Actions artifacts;
+historical counts below are not current-source verification.
+
+
 **Phase 10 운영 기반 + Phase 11A 검토 해결 + Phase 11B 마켓 고객 취소 대사. 실제 마켓·실결제 커넥터는 미승인 상태입니다.**
 
 Python 3.12+, FastAPI, SQLAlchemy 2, Alembic, PostgreSQL, Redis와 Next.js 운영 콘솔을 사용합니다. 기존 아키텍처를 유지하면서 Excel 공급사의 발주 묶음·전송·접수·증빙 지급·배송 대기를 연결합니다. PostgreSQL이 운영 데이터의 기준이며 Excel·메신저·운영자 메모는 외부 증거입니다.

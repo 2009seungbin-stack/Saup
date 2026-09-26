@@ -1,5 +1,16 @@
 # Implementation status · Phase 10 base / Phase 11A + 11B branch · 2026-09-26
 
+## Functional-closure development checkpoint
+
+This change starts from verified main `c7fd4f0` and adds operational XLSX order
+preview/import plus explicitly verified manual-source validation. It reuses the
+existing supplier workflow without new tables/migrations. It is **not** a full
+Saup 1.0 completion or live marketplace/payment enablement. The unmerged Phase 12A
+draft remains separate. Scope: `release-closure.md`; operation and tests:
+`order-intake.md`. For this source use its exact commit/Actions artifacts;
+historical counts below are not current-source verification.
+
+
 ## Current repository truth
 
 Phase 10 PR #2 was merged into main on 2026-09-26 at integration checkpoint `3983ca576d63eccd47d722457d1245c3e20c0fd6`. Its Git tree matches verified feature head `afe7a488af12e16bb284f9e9ea28f297359d9bbc`. See `phase10-main-merge.md` for separate pre-merge acceptance and post-merge CI evidence. This is a fixed integration checkpoint, not a promise that main never advances. Old empty-repository/ZIP-only claims and the foundation base `b1f1f15ac3b6a396fe9f14e549f11721f49bfb7f` are historical. Code and migration history outrank prose. No production deployment, live payment enablement or production readiness is claimed.
