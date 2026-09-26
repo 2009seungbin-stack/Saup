@@ -2,7 +2,8 @@ from datetime import timezone
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
-from .models import (AuditEvent, SupplierPriceHistory, Journal, Posting, SupplierOrderIntent,
+from .models import (OperationalReceipt, SettlementRevision, CancellationStatementRevision,
+    AuditEvent, SupplierPriceHistory, Journal, Posting, SupplierOrderIntent,
     SupplierBatchAcknowledgement, SupplierPaymentEvidence, SupplierPaymentConfirmation, OperationalIntervention,
     SupplierEvidenceRevision, SupplierEvidenceConfirmationBinding, SupplierCancellationRecovery, ReviewResolution,
     MarketplaceRefundEvidence, MarketplaceCancellationStatement, MarketplaceCancellationReconciliation)
@@ -30,7 +31,8 @@ def immutable(*_):
     raise ValueError("APPEND_ONLY_RECORD")
 
 
-for cls in (AuditEvent, SupplierPriceHistory, Journal, Posting, SupplierOrderIntent,
+for cls in (OperationalReceipt, SettlementRevision, CancellationStatementRevision,
+            AuditEvent, SupplierPriceHistory, Journal, Posting, SupplierOrderIntent,
             SupplierBatchAcknowledgement, SupplierPaymentEvidence, SupplierPaymentConfirmation, OperationalIntervention,
     SupplierEvidenceRevision, SupplierEvidenceConfirmationBinding, SupplierCancellationRecovery, ReviewResolution,
     MarketplaceRefundEvidence, MarketplaceCancellationStatement, MarketplaceCancellationReconciliation):

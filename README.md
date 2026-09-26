@@ -1,5 +1,13 @@
 # Saup · 위탁판매 운영 기반
 
+## Saup 1.0 기능 마감
+
+초기 설정·외부 배송 확인·클레임/부분 환불·정산 입금·미확정 정산서 정정 콘솔과 `/v1` 경로를 추가했습니다.
+운영 시작은 `초기 설정`에서 진행하며, 빈 설치에는 `python -m scripts.init_db`를 사용합니다.
+기존 기본 Compose는 합성 데모입니다. 빈 설치 인수 검증은 `docker/compose.blank.yml` 오버라이드를 사용합니다.
+마이그레이션 0005와 API/worker를 함께 적용해야 합니다. 범위·회계·검증 방법·차단 조건은
+[functional-closeout.md](docs/functional-closeout.md)에 있습니다. 실제 외부 송금·마켓 자동 연동을 의미하지 않습니다.
+
 ## Functional-closure development checkpoint
 
 This change starts from verified main `c7fd4f0` and adds operational XLSX order

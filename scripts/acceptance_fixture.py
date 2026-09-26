@@ -18,6 +18,7 @@ from packages.infrastructure.models import (
     Reservation, AuditEvent, Journal, Posting, Account, ImportBatch, SupplierEvidenceRevision,
     SupplierEvidenceConfirmationBinding, SupplierCancellationRecovery, ReviewResolution,
     MarketplaceRefundEvidence, MarketplaceCancellationStatement, MarketplaceCancellationReconciliation,
+    OperationalReceipt,
 )
 RESOLUTION_MODELS = (SupplierEvidenceRevision, SupplierEvidenceConfirmationBinding, SupplierCancellationRecovery,
     ReviewResolution, MarketplaceRefundEvidence, MarketplaceCancellationStatement, MarketplaceCancellationReconciliation)
@@ -99,6 +100,8 @@ def snapshot(factory):
                 'confirmation_id': confirmation.id if confirmation else None,
                 'shipment_id': shipment.id if shipment else None,
                 'marketplace_synced': shipment.marketplace_synced if shipment else False,
+                'manual_shipment_confirmation': s.scalar(select(OperationalReceipt.id).where(
+                    OperationalReceipt.kind=='SHIPMENT_EXTERNALLY_CONFIRMED', OperationalReceipt.target_id==shipment.id)) if shipment else None,
                 'shipment_jobs': len(jobs), 'shipment_job_statuses': [j.status for j in jobs],
                 'reservation_status': reservation.status if reservation else None,
                 'human_interventions': order.human_interventions,
@@ -113,14 +116,15 @@ def snapshot(factory):
 
 
 def verify_completed(result):
-    if result['schema_revision'] != '0004' or not result['balanced_journals']:
+    if result['schema_revision'] != '0005' or not result['balanced_journals']:
         raise RuntimeError('ACCEPTANCE_SCHEMA_OR_LEDGER_INVARIANT_FAILED')
     shipped = [o for o in result['orders'].values() if o['supplier_state'] == 'SHIPPED']
     if not shipped:
         raise RuntimeError('ACCEPTANCE_NO_COMPLETED_SUPPLIER_TRANSACTION')
     for order in shipped:
-        if not (order['payment_status'] == 'SUCCEEDED' and order['marketplace_synced']
-                and order['shipment_jobs'] == 1 and order['shipment_job_statuses'] == ['DONE']):
+        if not (order['payment_status'] == 'SUCCEEDED' and order['shipment_jobs'] == 1 and (
+                (order['marketplace_synced'] and order['shipment_job_statuses'] == ['DONE']) or
+                (order.get('manual_shipment_confirmation') and not order['marketplace_synced'] and order['shipment_job_statuses']==['DEAD']))):
             raise RuntimeError('ACCEPTANCE_COMPLETED_EFFECTS_INCONSISTENT')
     for order in result['orders'].values():
         if order['supplier_state'] in {'REJECTED', 'MANUAL_REVIEW'} and order['payment_id']:

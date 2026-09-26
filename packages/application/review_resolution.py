@@ -51,8 +51,11 @@ class ReviewResolutionService:
                 # Failed commands roll back ALL business effects, but retain a
                 # safe rejection audit outside the savepoint.
                 with s.begin_nested():
+                    payload = cmd.model_dump()
+                    if payload.get('expected_statement_revision') == 0:
+                        payload.pop('expected_statement_revision')
                     result = execute_command(s, scope, cmd.idempotency_key,
-                        {"target": target, **cmd.model_dump()}, lambda: fn(s))
+                        {"target": target, **payload}, lambda: fn(s))
             except DomainError as exc:
                 error = exc
                 audit(s, "REVIEW_COMMAND_BLOCKED", target, actor=actor.username, reason=exc.code)

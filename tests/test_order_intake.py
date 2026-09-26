@@ -92,7 +92,9 @@ def test_validated_import_reuses_entire_supplier_path_without_api_for_intake(exc
     b=batch(e,[so]);send(e,b);ack(e,b);p=payment(e,so);proof=record(e,p);confirm(e,p,proof)
     with e['factory'].begin() as s:
         shipment=e['commerce'].add_shipment(s,tracking(e,so));sid=shipment.id
-    e['commerce'].sync_shipment(sid)  # Explicitly demo provider, not live success.
+    from packages.domain.errors import IntegrationError
+    with pytest.raises(IntegrationError, match='MANUAL_EXTERNAL_SHIPMENT_CONFIRMATION_REQUIRED'):
+        e['commerce'].sync_shipment(sid)
     assert counts(e)['Payment']==1 and counts(e)['SupplierOrder']==1
 
 

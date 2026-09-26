@@ -1,5 +1,12 @@
 # Saup 인수인계 · Phase 10 기반 / Phase 11A·11B 개발
 
+## 1.0 기능 마감 후속
+
+기준 main `0c1cb07912c178ec136dd33514c14da2d503eba2`에서 기존 서비스에 운영 설정,
+배송·환불·정산 외부 증빙, 부분 환불 상태 수정과 제한된 정산서 정정을 추가했습니다.
+마이그레이션 0005/46개 테이블이며 이전 스키마는 동결 유지합니다. 최신 구현 범위와
+검증 절차는 `docs/functional-closeout.md`가 우선합니다. 아래 수치는 과거 소스에만 해당합니다.
+
 ## Functional-closure development checkpoint
 
 This change starts from verified main `c7fd4f0` and adds operational XLSX order

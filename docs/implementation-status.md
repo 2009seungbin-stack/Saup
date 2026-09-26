@@ -1,5 +1,13 @@
 # Implementation status · Phase 10 base / Phase 11A + 11B branch · 2026-09-26
 
+## 1.0 closure increment
+
+See `functional-closeout.md` for current operator setup, external handoffs, claims,
+partial refunds, settlement and immutable correction history (migration 0005).
+Historical counts below are not evidence for this source. Closure CI adds an
+independent blank-install Chromium/API/restart job; exact-SHA artifacts determine
+tested status. No live provider or backup restoration is claimed.
+
 ## Functional-closure development checkpoint
 
 This change starts from verified main `c7fd4f0` and adds operational XLSX order

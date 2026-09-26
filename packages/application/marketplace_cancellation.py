@@ -19,13 +19,16 @@ Scope is one fulfillment line. A marketplace order with another line fails
 closed; parent/multi-line reconciliation is future work.
 """
 from sqlalchemy import select
+from types import SimpleNamespace
 from packages.domain.errors import DomainError
 from packages.domain.marketplace_cancellation import (
-    MarketplaceRefundReceipt, MarketplaceCancellationStatementInput, MarketplaceCancellationCompletion)
+    MarketplaceRefundReceipt, MarketplaceCancellationStatementInput, MarketplaceCancellationCompletion,
+    CancellationStatementCorrection)
 from packages.infrastructure.models import (
     Review, Order, Payment, Reservation, SupplierOrder, SupplierCancellation, SupplierCancellationRecovery,
     SupplierPaymentEvidence, SupplierEvidenceRevision, Shipment, Claim, Refund, Settlement, Journal,
-    MarketplaceRefundEvidence, MarketplaceCancellationStatement, MarketplaceCancellationReconciliation,
+    MarketplaceRefundEvidence, MarketplaceCancellationStatement, MarketplaceCancellationReconciliation, CancellationStatementRevision,
+    OperationalReceipt, SettlementRevision,
 )
 from packages.infrastructure.security import fingerprint
 from .common import audit, review
@@ -131,7 +134,7 @@ class MarketplaceCancellationService:
 
     def _evidence_unused(self, s, ctx, model, reference, evidence_hash):
         """Customer refund/statement evidence cannot reuse any other money evidence."""
-        for cls in (MarketplaceRefundEvidence, MarketplaceCancellationStatement, SupplierCancellationRecovery,
+        for cls in (OperationalReceipt, SettlementRevision, CancellationStatementRevision, MarketplaceRefundEvidence, MarketplaceCancellationStatement, SupplierCancellationRecovery,
                     SupplierPaymentEvidence, SupplierEvidenceRevision):
             if s.scalar(select(cls.id).where(cls.evidence_hash == evidence_hash)):
                 raise DomainError("MARKETPLACE_EVIDENCE_HASH_IN_USE")
@@ -147,7 +150,10 @@ class MarketplaceCancellationService:
 
     @staticmethod
     def _business(cmd):
-        return fingerprint(cmd.model_dump(exclude={"idempotency_key"}))
+        payload = cmd.model_dump(exclude={"idempotency_key"})
+        if payload.get('expected_statement_revision') == 0:
+            payload.pop('expected_statement_revision')
+        return fingerprint(payload)
 
     @staticmethod
     def _refund_view(x):
@@ -159,6 +165,51 @@ class MarketplaceCancellationService:
         return {"statement_id": x.id, "review_id": x.review_id, "order_id": x.order_id,
                 "refund_evidence_id": x.refund_evidence_id, "classification": x.classification,
                 "completion_allowed": x.classification == ZERO}
+
+    @staticmethod
+    def effective_statement(s, statement):
+        if statement is None: return None
+        latest = s.scalar(select(CancellationStatementRevision).where(CancellationStatementRevision.statement_id == statement.id)
+            .order_by(CancellationStatementRevision.revision.desc()).limit(1))
+        data = {column.name: getattr(statement, column.name) for column in statement.__table__.columns}
+        data['revision'] = 0
+        if latest:
+            data.update(latest.values)
+            data.update(reference=latest.reference, evidence_hash=latest.evidence_hash, actor=latest.actor,
+                        recorded_at=latest.created_at, revision=latest.revision)
+        return SimpleNamespace(**data)
+
+    def correct_statement(self, review_id, raw, actor):
+        actor.require('admin'); cmd = CancellationStatementCorrection.model_validate(raw)
+        def action(s):
+            row = self.r._open_review(s, review_id, CUSTOMER)
+            ctx = self._context(s, row); self._snapshot(ctx, cmd.snapshot_hash)
+            original = self.r.get(s, MarketplaceCancellationStatement, cmd.statement_id)
+            if original.review_id != row.id or original.order_id != ctx['order'].id:
+                raise DomainError('STATEMENT_NOT_FOR_THIS_REVIEW')
+            current = self.effective_statement(s, original)
+            if current.revision != cmd.expected_revision: raise DomainError('STALE_STATEMENT_REVISION')
+            refund = self.r.get(s, MarketplaceRefundEvidence, original.refund_evidence_id)
+            self._check_records(ctx, refund, current)
+            if cmd.refund_evidence_id != refund.id or cmd.customer_refund_amount != refund.amount:
+                raise DomainError('STATEMENT_CUSTOMER_REFUND_MISMATCH')
+            self._evidence_unused(s, ctx, MarketplaceCancellationStatement, cmd.reference, cmd.evidence_hash)
+            if s.scalar(select(CancellationStatementRevision.id).where(CancellationStatementRevision.reference == cmd.reference)):
+                raise DomainError('MARKETPLACE_EVIDENCE_REFERENCE_IN_USE')
+            values = {k: getattr(cmd, k) for k in ('customer_refund_amount', *SETTLEMENT_FIELDS)}
+            values['classification'] = UNSUPPORTED if cmd.residual() else ZERO
+            version = CancellationStatementRevision(statement_id=original.id, review_id=row.id, order_id=original.order_id,
+                revision=current.revision+1, values=values, reason=cmd.reason, reference=cmd.reference,
+                evidence_hash=cmd.evidence_hash, actor=actor.username)
+            s.add(version); s.flush()
+            resolve_reviews(s, original.id, [RESIDUAL], actor.username, self.c.clock(), 'STATEMENT_CORRECTED')
+            if cmd.residual(): review(s, RESIDUAL, original.id, values | {'revision': version.revision})
+            audit(s, 'CANCELLATION_STATEMENT_CORRECTED', original.order_id, actor=actor.username,
+                new={'statement_id': original.id, 'revision_id': version.id, **values}, reason=cmd.reason,
+                correlation_id=ctx['order'].correlation_id)
+            intervention(s, 'CANCELLATION_STATEMENT_CORRECTED', f'cancel-statement:{version.id}', actor.username, self.c.clock(), order=ctx['order'])
+            return {'statement_id': original.id, 'revision': version.revision, 'classification': values['classification']}
+        return self.r._command('review.marketplace-statement-correct', cmd, review_id, actor, action)
 
     def record_refund(self, review_id, raw, actor):
         actor.require("admin"); cmd = MarketplaceRefundReceipt.model_validate(raw)
@@ -253,6 +304,9 @@ class MarketplaceCancellationService:
             statement = s.scalar(select(MarketplaceCancellationStatement).where(MarketplaceCancellationStatement.review_id == row.id))
             if statement is None:
                 raise DomainError("MARKETPLACE_STATEMENT_REQUIRED")
+            statement = self.effective_statement(s, statement)
+            if cmd.expected_statement_revision != statement.revision:
+                raise DomainError('STALE_STATEMENT_REVISION')
             if cmd.refund_evidence_id != refund.id or cmd.statement_id != statement.id:
                 raise DomainError("STALE_RECONCILIATION_EVIDENCE")
             self._check_records(ctx, refund, statement)
@@ -274,23 +328,30 @@ class MarketplaceCancellationService:
                 actor.username, self.c.clock(), order=order)
             return self.r._resolved(s, row, ACTION, cmd, actor, {"reconciliation_id": record.id, "order_id": order.id,
                 "order_state": order.state, "payment_status": ctx["payment"].status,
-                "refund_evidence_id": refund.id, "statement_id": statement.id})
+                "refund_evidence_id": refund.id, "statement_id": statement.id, "statement_revision": statement.revision})
         return self.r._command("review.marketplace-complete", cmd, review_id, actor, action)
 
     def detail(self, s, row):
         """Operator-safe projection. No PII, ciphertext or free-text notes."""
         refund = s.scalar(select(MarketplaceRefundEvidence).where(MarketplaceRefundEvidence.review_id == row.id))
         statement = s.scalar(select(MarketplaceCancellationStatement).where(MarketplaceCancellationStatement.review_id == row.id))
+        original = statement
+        statement = self.effective_statement(s, statement)
         done = s.scalar(select(MarketplaceCancellationReconciliation).where(MarketplaceCancellationReconciliation.review_id == row.id))
         records = {
             "refund_evidence": refund and {"id": refund.id, "amount": refund.amount, "reference": refund.reference,
                 "evidence_hash": refund.evidence_hash, "actor": refund.actor, "recorded_at": refund.recorded_at},
-            "statement": statement and {"id": statement.id, "customer_refund_amount": statement.customer_refund_amount,
+            "statement": statement and {"id": statement.id, "revision": statement.revision, "customer_refund_amount": statement.customer_refund_amount,
                 **{k: getattr(statement, k) for k in SETTLEMENT_FIELDS}, "classification": statement.classification,
                 "reference": statement.reference, "evidence_hash": statement.evidence_hash, "actor": statement.actor,
                 "recorded_at": statement.recorded_at},
             "reconciliation": done and {"id": done.id, "order_state_after": done.order_state_after, "actor": done.actor,
                 "completed_at": done.completed_at}}
+        records['statement_history'] = ([{'revision': 0, 'reference': original.reference,
+            **{k: getattr(original, k) for k in ('customer_refund_amount', *SETTLEMENT_FIELDS)}}] + [
+            {'revision': x.revision, 'reference': x.reference, 'reason': x.reason, **x.values}
+            for x in s.scalars(select(CancellationStatementRevision).where(CancellationStatementRevision.statement_id == original.id)
+                .order_by(CancellationStatementRevision.revision))]) if original else []
         result = {"eligible": False, "blocked_reason": None, "snapshot": None, "next_action": None,
                   "marketplace_cancellation": records, "money_sent": False}
         if row.status == "RESOLVED":

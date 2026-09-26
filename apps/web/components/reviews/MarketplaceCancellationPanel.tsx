@@ -2,13 +2,14 @@
 import {FormEvent,useState} from 'react';
 import {api} from '../../lib/api';
 import {at,won} from '../suppliers/types';
+import CommandForm from '../operations/CommandForm';
 
 export const CUSTOMER_CATEGORY='MARKETPLACE_CANCELLATION_RECONCILIATION_REQUIRED';
 
 type Snapshot = {snapshot_hash:string;order_id:string;marketplace:string;external_order_id:string;external_line_id:string;
   customer_refund_amount:number;payment_id:string;payment_amount:number;supplier_recovery_id:string;recovery_amount:number};
 type RefundRecord = {id:string;amount:number;reference:string;evidence_hash:string;actor:string;recorded_at:string};
-type StatementRecord = {id:string;customer_refund_amount:number;seller_payout_amount:number;seller_debit_amount:number;
+type StatementRecord = {id:string;revision:number;customer_refund_amount:number;seller_payout_amount:number;seller_debit_amount:number;
   retained_fee_amount:number;outstanding_balance:number;classification:string;reference:string;evidence_hash:string;actor:string;recorded_at:string};
 export type MarketplaceReview = {id:string;status:string;stage?:string;next_action?:string|null;eligible?:boolean;
   blocked_reason?:string|null;snapshot?:Snapshot|null|Record<string,unknown>;
@@ -65,7 +66,7 @@ export default function MarketplaceCancellationPanel({review,role,onChanged}:
     }catch(e){setError(e instanceof Error?e.message:String(e));}}
   function complete(event:FormEvent){event.preventDefault();if(!snapshot||!records?.refund_evidence||!records.statement||!attested)return;
     void post('complete-marketplace-cancellation',{snapshot_hash:snapshot.snapshot_hash,refund_evidence_id:records.refund_evidence.id,
-      statement_id:records.statement.id,confirmed_reconciliation:true});}
+      statement_id:records.statement.id,expected_statement_revision:records.statement.revision??0,confirmed_reconciliation:true});}
   return <section className="supplier-form" aria-label="마켓 고객 취소 대사">
     <h4>마켓 고객 취소 대사</h4>
     <p className="notice">이 화면은 송금하지 않습니다 (this does not send money). 마켓에서 이미 완료된 고객 전액 환불과 최종 취소 정산서를 증빙으로 기록하고, 모든 조건을 다시 확인한 뒤에만 주문을 취소 완료로 바꿉니다. 지급·예약·재고는 변경하지 않습니다.</p>
@@ -80,6 +81,18 @@ export default function MarketplaceCancellationPanel({review,role,onChanged}:
     {records?.refund_evidence&&<p>고객 환불 증빙: {won(records.refund_evidence.amount)} · {records.refund_evidence.reference} · {records.refund_evidence.actor} · {at(records.refund_evidence.recorded_at)}</p>}
     {records?.statement&&<p>최종 정산서: {records.statement.classification} · 고객 환불 {won(records.statement.customer_refund_amount)} · {FIELDS.map(([key,label])=>`${label} ${won(records.statement![key])}`).join(' · ')}</p>}
     {records?.reconciliation&&<p>대사 완료: 주문 {records.reconciliation.order_state_after} · {records.reconciliation.actor} · {at(records.reconciliation.completed_at)}</p>}
+    {role==='admin'&&snapshot&&records?.statement&&records.refund_evidence&&!records.reconciliation&&<CommandForm title="미해결 취소 정산서 정정"
+      path={`/v1/reviews/${review.id}/marketplace-statement-corrections`} onSaved={onChanged}
+      notice="원본은 보존됩니다. 모든 잔여 금액이 0일 때만 기존 완료 조건을 다시 검사할 수 있습니다."
+      fields={[{name:'reference',label:'새 정산서 참조 번호'},{name:'evidence_hash',label:'새 정산서 SHA-256'},
+        {name:'customer_refund_amount',label:'정정 고객 환불액',type:'number'},
+        ...FIELDS.map(([name,label])=>({name,label:`정정 ${label}`,type:'number' as const})),
+        {name:'reason',label:'정정 사유',options:['WRONG_AMOUNT','WRONG_REFERENCE','REPLACEMENT_STATEMENT'].map(x=>({value:x,label:x}))},
+        {name:'confirmed_final_statement',label:'정정된 최종 정산서를 확인했습니다.',type:'checkbox'},
+        {name:'confirmed_marketplace_cancelled',label:'마켓 취소 완료를 확인했습니다.',type:'checkbox'}]}
+      body={v=>({...v,idempotency_key:`correct-${records.statement!.id}-${records.statement!.revision??0}-${v.reference}`,
+        snapshot_hash:snapshot.snapshot_hash,statement_id:records.statement!.id,expected_revision:records.statement!.revision??0,
+        refund_evidence_id:records.refund_evidence!.id})}/>}
     {review.eligible&&role!=='admin'&&<p>관리자만 마켓 취소 대사 명령을 실행할 수 있습니다.</p>}
     {admin&&stage==='CUSTOMER_REFUND_EVIDENCE_MISSING'&&<form onSubmit={recordRefund}>
       <h5>마켓 고객 환불 증빙 기록</h5>

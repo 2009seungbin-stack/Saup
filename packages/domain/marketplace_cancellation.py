@@ -65,9 +65,16 @@ class MarketplaceCancellationCompletion(Strict):
     snapshot_hash: Hash
     refund_evidence_id: Identifier
     statement_id: Identifier
+    expected_statement_revision: int = Field(default=0, strict=True, ge=0)
     confirmed_reconciliation: Attestation
 
     @field_validator("confirmed_reconciliation", mode="before")
     @classmethod
     def explicit_attestation(cls, value):
         return _literal_true(value)
+
+
+class CancellationStatementCorrection(MarketplaceCancellationStatementInput):
+    statement_id: Identifier
+    expected_revision: int = Field(strict=True, ge=0)
+    reason: Literal['WRONG_AMOUNT', 'WRONG_REFERENCE', 'REPLACEMENT_STATEMENT']
