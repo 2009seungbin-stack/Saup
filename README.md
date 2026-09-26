@@ -82,6 +82,8 @@ python -m scripts.demo_supplier_operations --output reports/phase10/synthetic.js
 
 ## 주요 경로
 
+운영자/관리자는 **상품 제작** 메뉴에서 상품 사진과 정보를 넣어 상세페이지 PNG와 섬네일 3종을 자동 제작할 수 있습니다. 디자인·출력 크기 선택, PNG/HTML ZIP 다운로드, 사진이 포함된 편집 파일 저장·불러오기를 지원합니다. 사용법과 지원 범위는 [상품 제작 안내](docs/product-creative-studio.md)를 참고하세요.
+
 | 경로 | 역할 |
 |---|---|
 | `packages/application/supplier_operations.py` | 배치·접수·증빙·취소·가드가 있는 복구 명령 |
