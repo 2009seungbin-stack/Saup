@@ -2,6 +2,7 @@
 import { FormEvent, useCallback, useEffect, useState } from 'react';
 import { api } from '../lib/api';
 import SupplierOperations from '../components/suppliers/SupplierOperations';
+import OrderIntakePanel from '../components/orders/OrderIntakePanel';
 import ReviewResolutionPanel from '../components/reviews/ReviewResolutionPanel';
 
 type User = {username:string;role:string;mode:string};
@@ -48,8 +49,9 @@ export default function Dashboard() {
     {error&&<div className="error" role="alert">{error}<button onClick={()=>setError('')}>닫기</button></div>}
     <section className="stats" aria-label="오늘의 운영 지표"><article><label>총 주문액</label><strong>{won(overview?.today.gross_sales??0)}</strong><small>주문 {overview?.today.orders??0}건</small></article><article><label>예상 공헌이익</label><strong>{won(overview?.today.expected_contribution??0)}</strong><small>확정 손익 아님 · 클레임 조정 전</small></article><article><label>가용 은행 자금</label><strong>{won(overview?.cash.available_cash??0)}</strong><small>예치금은 공급사별 별도 계산</small></article><article><label>운영 예외</label><strong>{overview?.risk.open_reviews??0}<em>건</em></strong><small>판매중지 {overview?.risk.paused_listings??0} · 작업 실패 {overview?.risk.dead_jobs??0}</small></article></section>
     <section className="cashbar"><span>은행 잔액 <b>{won(overview?.cash.bank_balance??0)}</b></span><span>발주 예약 <b>{won(overview?.cash.bank_committed??0)}</b></span><span>환불 준비금 <b>{won(overview?.cash.refund_reserve??0)}</b></span><span>안전 준비금 <b>{won(overview?.cash.safety_reserve??0)}</b></span><span title="미정산 매출은 사용 가능한 현금이 아닙니다.">미정산 채권 <b>{won(overview?.cash.marketplace_receivable??0)}</b></span></section>
-    <nav aria-label="운영 메뉴">{['상품','주문','공급사 운영','검토 큐','검토 해결','결제','파일','연동'].map(t=><button key={t} className={tab===t?'selected':''} onClick={()=>setTab(t)}>{t}{t==='검토 큐'&&reviews.length>0&&<i>{reviews.length}</i>}</button>)}</nav>
+    <nav aria-label="운영 메뉴">{['상품','주문','주문 가져오기','공급사 운영','검토 큐','검토 해결','결제','파일','연동'].map(t=><button key={t} className={tab===t?'selected':''} onClick={()=>setTab(t)}>{t}{t==='검토 큐'&&reviews.length>0&&<i>{reviews.length}</i>}</button>)}</nav>
     <section className="panel">
+      {tab==='주문 가져오기'&&<OrderIntakePanel role={user.role} onSuppliers={()=>setTab('공급사 운영')}/>}
       {tab==='공급사 운영'&&<SupplierOperations role={user.role} mode={user.mode} onShipmentImport={()=>setTab('파일')}/>}
       {tab==='상품'&&<div className="tablewrap"><table><thead><tr><th>상품 / SKU</th><th>마켓</th><th>원가 + 배송</th><th>판매가</th><th>재고</th><th>자금 기준 추가 주문</th><th>내부 상태</th><th>마켓 확인</th></tr></thead><tbody>{catalog.map(x=><tr key={x.id}><td><b>{x.title}</b><small>{x.sku}</small></td><td>{x.marketplace}</td><td>{won(x.cost+x.shipping)}</td><td>{won(x.price)}</td><td>{x.stock??'미확인'}</td><td title="다른 SKU 주문과 동일 현금을 공유하는 개별 상한입니다. 합산하면 안 됩니다.">{x.safe_additional_order_capacity}건</td><td><Tag value={x.desired_state}/></td><td><Tag value={x.remote_state}/></td></tr>)}</tbody></table></div>}
       {tab==='주문'&&<><div className="tablewrap"><table><thead><tr><th>주문</th><th>마켓</th><th>수량</th><th>주문액</th><th>상태</th><th>이력</th></tr></thead><tbody>{orders.map(x=><tr key={x.id}><td>{x.external_id}<small>{new Date(x.created_at).toLocaleString('ko-KR')}</small></td><td>{x.marketplace}</td><td>{x.quantity}</td><td>{won(x.gross_sale)}</td><td><Tag value={x.state}/></td><td><button onClick={()=>void showTrail(x)}>거래 추적</button></td></tr>)}</tbody></table></div>{orders.length===0&&<p className="empty">수집된 주문이 없습니다.</p>}{selectedOrder&&<aside className="trail"><h3>{selectedOrder} · 감사 이력</h3>{trail.map(x=><div key={x.id}><time>{new Date(x.created_at).toLocaleTimeString('ko-KR')}</time><b>{x.event}</b><span>{x.reason} · {x.actor}</span></div>)}</aside>}</>}

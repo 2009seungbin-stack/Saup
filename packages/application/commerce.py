@@ -8,7 +8,7 @@ from packages.domain.schemas import OrderInput, Address, ShipmentRow
 from packages.domain.pricing import margin, fee_for
 from packages.domain.state_machine import validate_transition, EARLY_CANCEL
 from packages.infrastructure.models import (Order, Supplier, SupplierProduct, Product, MarketplaceListing,
-    SupplierOrder, Reservation, Payment, Shipment, Claim, MarketplaceRefundEvidence)
+    SupplierOrder, Reservation, Payment, Shipment, Claim, MarketplaceRefundEvidence, AuditEvent)
 from packages.infrastructure.schema_v1 import uid
 from packages.infrastructure.db import aware
 from packages.infrastructure.security import Cipher, fingerprint
@@ -32,35 +32,44 @@ class Commerce:
 
     def ingest(self, raw: dict) -> dict:
         data = OrderInput.model_validate(raw)
-        payload = data.model_dump()
-        hashed = fingerprint(payload)
         with self.factory.begin() as s:
             lock_treasury(s)
-            existing = s.scalar(select(Order).where(Order.marketplace == data.marketplace,
-                Order.external_id == data.external_id, Order.external_line_id == data.external_line_id))
-            if existing:
-                if existing.input_hash != hashed: raise DomainError("ORDER_IDENTITY_PAYLOAD_CONFLICT")
-                return {"id": existing.id, "state": existing.state, "duplicate": True}
-            listing = s.get(MarketplaceListing, data.listing_id)
-            if listing is None or listing.marketplace != data.marketplace: raise DomainError("INVALID_LISTING", 422)
-            order = Order(marketplace=data.marketplace, external_id=data.external_id,
-                external_line_id=data.external_line_id, listing_id=data.listing_id, quantity=data.quantity,
-                gross_sale=data.gross_sale, discount=data.discount, input_hash=hashed,
-                pii_ciphertext=self.cipher.encrypt({"original_address": data.address, "normalized_address": data.address}),
-                hold_until=self.clock() + timedelta(seconds=self.settings.order_hold_seconds))
-            s.add(order); s.flush()
-            audit(s, "ORDER_RECEIVED", order.id, correlation_id=order.correlation_id)
-            # A full-refund/final-cancellation record was single-line. A new line of the
-            # same marketplace order invalidates that assumption: fail closed, never fulfil.
-            cancelled = s.scalar(select(MarketplaceRefundEvidence.order_id).where(
-                MarketplaceRefundEvidence.marketplace == order.marketplace,
-                MarketplaceRefundEvidence.external_order_id == order.external_id))
-            if cancelled:
-                transition(s, order, "MANUAL_REVIEW", "MARKETPLACE_LINE_AFTER_CANCELLATION_EVIDENCE")
-                review(s, "MARKETPLACE_LINE_AFTER_CANCELLATION_EVIDENCE", order.id, {"cancelled_order_id": cancelled})
-                return {"id": order.id, "state": order.state, "duplicate": False}
-            enqueue(s, "order.process", f"order:{order.id}", {"order_id": order.id}, at=order.hold_until)
+            return self.ingest_in_session(s, data)
+
+    def ingest_in_session(self, s, data: OrderInput, *, enqueue_processing=True) -> dict:
+        """Caller holds treasury. Allows an entire file to commit or roll back together.
+
+        File intake deliberately does not enqueue API-driven validation; it opens
+        an explicit source-verification review instead. Default ingestion is unchanged.
+        """
+        payload = data.model_dump()
+        hashed = fingerprint(payload)
+        existing = s.scalar(select(Order).where(Order.marketplace == data.marketplace,
+            Order.external_id == data.external_id, Order.external_line_id == data.external_line_id))
+        if existing:
+            if existing.input_hash != hashed: raise DomainError("ORDER_IDENTITY_PAYLOAD_CONFLICT")
+            return {"id": existing.id, "state": existing.state, "duplicate": True}
+        listing = s.get(MarketplaceListing, data.listing_id)
+        if listing is None or listing.marketplace != data.marketplace: raise DomainError("INVALID_LISTING", 422)
+        order = Order(marketplace=data.marketplace, external_id=data.external_id,
+            external_line_id=data.external_line_id, listing_id=data.listing_id, quantity=data.quantity,
+            gross_sale=data.gross_sale, discount=data.discount, input_hash=hashed,
+            pii_ciphertext=self.cipher.encrypt({"original_address": data.address, "normalized_address": data.address}),
+            hold_until=self.clock() + timedelta(seconds=self.settings.order_hold_seconds))
+        s.add(order); s.flush()
+        audit(s, "ORDER_RECEIVED", order.id, correlation_id=order.correlation_id)
+        # A full-refund/final-cancellation record was single-line. A new line of the
+        # same marketplace order invalidates that assumption: fail closed, never fulfil.
+        cancelled = s.scalar(select(MarketplaceRefundEvidence.order_id).where(
+            MarketplaceRefundEvidence.marketplace == order.marketplace,
+            MarketplaceRefundEvidence.external_order_id == order.external_id))
+        if cancelled:
+            transition(s, order, "MANUAL_REVIEW", "MARKETPLACE_LINE_AFTER_CANCELLATION_EVIDENCE")
+            review(s, "MARKETPLACE_LINE_AFTER_CANCELLATION_EVIDENCE", order.id, {"cancelled_order_id": cancelled})
             return {"id": order.id, "state": order.state, "duplicate": False}
+        if enqueue_processing:
+            enqueue(s, "order.process", f"order:{order.id}", {"order_id": order.id}, at=order.hold_until)
+        return {"id": order.id, "state": order.state, "duplicate": False}
 
     def validate_order(self, s, order, *, already_reserved=False):
         listing, sp, supplier, product = context(s, order)
@@ -93,6 +102,11 @@ class Commerce:
         with self.factory() as s:
             order = s.get(Order, order_id)
             if order is None: raise DomainError("ORDER_NOT_FOUND", 404)
+            if order.state != "RECEIVED": return
+            # Imported orders have an explicit manual source-verification gate.
+            if s.scalar(select(AuditEvent.id).where(AuditEvent.entity_id == order.id,
+                    AuditEvent.event == "ORDER_IMPORTED_FROM_FILE")):
+                return
             market, external_id = order.marketplace, order.external_id
         remote = self.registry.marketplace(market).get_order(external_id)
         if remote["status"] == "CANCELLED":
@@ -102,9 +116,23 @@ class Commerce:
             lock_treasury(s)
             order = s.get(Order, order_id)
             if order.state != "RECEIVED": return
-            if self.clock() < aware(order.hold_until): raise IntegrationError("ORDER_HOLD", retryable=True)
-            transition(s, order, "VALIDATING")
-            try:
+            self.validate_received_in_session(s, order)
+
+    def validate_received_in_session(self, s, order):
+        """Internal checks ONLY, after a caller's explicit source-verification gate.
+
+        Used by provider-backed ingestion and the separately audited file path.
+        Neither caller may infer supplier acceptance or payment from this method.
+        """
+        if order.state not in {"RECEIVED", "MANUAL_REVIEW"} or order.cancel_requested:
+            raise DomainError("ORDER_NOT_VALIDATABLE")
+        if any(s.scalar(select(cls.id).where(cls.order_id == order.id)) for cls in (SupplierOrder, Reservation, Payment)):
+            raise DomainError("ORDER_ALREADY_HAS_BUSINESS_EFFECTS")
+        if self.clock() < aware(order.hold_until):
+            raise IntegrationError("ORDER_HOLD", retryable=True)
+        transition(s, order, "VALIDATING")
+        try:
+            with s.begin_nested():
                 listing, sp, supplier, cost, result = self.validate_order(s, order)
                 transition(s, order, "VALIDATED")
                 transition(s, order, "RISK_CHECKED")
@@ -119,13 +147,13 @@ class Commerce:
                     review(s, "SUPPLIER_FILE_ACK_REQUIRED", order.id)
                 else:
                     enqueue(s, "supplier.submit", so.business_key, {"supplier_order_id": so.id})
-            except ValidationError:
-                self.hold(s, order, "ADDRESS_ERROR")
-            except DomainError as exc:
-                self.hold(s, order, exc.code)
-                if exc.code in {"INSUFFICIENT_CASH", "MARGIN_BELOW_THRESHOLD", "STALE_INVENTORY", "OUT_OF_STOCK"}:
-                    listing = s.get(MarketplaceListing, order.listing_id)
-                    pause_listing(s, listing, exc.code)
+        except ValidationError:
+            self.hold(s, order, "ADDRESS_ERROR")
+        except DomainError as exc:
+            self.hold(s, order, exc.code)
+            if exc.code in {"INSUFFICIENT_CASH", "MARGIN_BELOW_THRESHOLD", "STALE_INVENTORY", "OUT_OF_STOCK"}:
+                listing = s.get(MarketplaceListing, order.listing_id)
+                pause_listing(s, listing, exc.code)
 
     def submit_supplier(self, supplier_order_id):
         with self.factory() as s:
