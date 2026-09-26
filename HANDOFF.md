@@ -1,6 +1,6 @@
 # Saup Phase 10 인수인계
 
-갱신 기준: 2026-09-25. 저장소 `2009seungbin-stack/Saup`, 기본 브랜치 `main`, 작업 브랜치 `feat/phase10-supplier-operations`.
+갱신 기준: 2026-09-26. 저장소 `2009seungbin-stack/Saup`, 기본 브랜치 `main`, 작업 브랜치 `feat/phase10-supplier-operations`.
 
 ## 현재 소스의 기준
 
@@ -34,8 +34,10 @@ main 기준 커밋은 `b1f1f15ac3b6a396fe9f14e549f11721f49bfb7f`이며 전체 �
 
 ## 검증과 남은 사항
 
-정확한 실행 결과는 `docs/phase10-verification.md`와 소스 SHA가 일치하는 CI 아티팩트를 우선합니다. Python 3.13 로컬 결과를 Python 3.12/PG/Redis/브라우저 통과로 대체하지 않습니다. 첫 전체 CI 실행 36151766961은 커밋 bdf716666ccb3261b4d7ba188733b0bb7c6947f7에서 실제 성공했습니다: 일반 183개 + PostgreSQL 3개 + Redis 2개, 실패/스킵 0개, statement coverage 90.60%, npm ci/typecheck/build 통과. 이후 커밋은 해당 커밋에 연결된 새 실행 결과를 확인해야 합니다. 재현 명령은 README와 `scripts/verify_phase10.py`에 있습니다.
+검증 체크포인트 `b6dae8c1bdf4491b00c18d4e83aed49de2549693`에서 일반 204개·PostgreSQL 3개·Redis 2개와 실제 Chromium 브라우저 7개, 총 216개가 통과했습니다. 일반 CI `36207399192`와 Docker/브라우저 CI `36207399204`가 모두 성공했으며 이미지 빌드·Compose 기동·DB/Redis 포함 재시작 전후 거래 보존도 확인했습니다. 전체 원시 증거와 이전 실패·수정 기록은 `docs/phase10-verification.md`에 구분했습니다. 로컬 Python 3.13 결과를 CI Python 3.12 결과로 대체하지 않습니다. 이후 커밋은 해당 SHA의 새 검증이 필요합니다.
 
-내부 후속 검증: 브라우저 역할별 E2E, Docker clean build/start/restart, 부하/장애/복구, 증빙 저장소/보존 정책, 최소권한 DB/키 회전/MFA, 실제 공급사 템플릿 검수. 외부 차단: 공급사 계약·실제 파일 프로필·지급처/예치금 근거, 공식 마켓/지급 API 접근권한. `REAL_PAYMENTS_ENABLED`는 계속 차단입니다.
+이번 후속 변경은 검증 인프라와 실제 완료된 증빙의 UI 상태 표시 수정에 한정했습니다. 금융 로직·DB 마이그레이션·실결제 가드는 변경하지 않았습니다. 로그인 제한 테스트는 제한 로직을 바꾸지 않고 시계만 고정해 분 경계의 오검출을 제거했습니다.
+
+내부 후속 검증: Firefox/WebKit·모바일, 운영 HTTPS, 부하/장애/백업 복원, 증빙 저장소/보존 정책, 최소권한 DB/키 회전/MFA, 실제 공급사 템플릿 검수. 외부 차단: 공급사 계약·실제 파일 프로필·지급처/예치금 근거, 공식 마켓/지급 API 접근권한. `REAL_PAYMENTS_ENABLED`는 계속 차단입니다.
 
 다음 대형 기능은 Phase 10 검증을 끝낸 뒤 결정합니다. 우선 후보는 기존 차단 상태를 안전하게 푸는 Review Resolution Engine입니다. 다중 주문행, 분할배송/재배송, 정산 배치, worker lease renewal, 실마켓 연동은 이번 변경에서 시작하지 않았습니다.

@@ -18,9 +18,13 @@ Backup first; run Alembic 0001→0002 against a disposable copy. Existing Excel 
 
 REAL_PAYMENTS_ENABLED remains blocked without a certified live connector. Evidence is an attestation of a completed external action, not a transfer API. Destination/amount/reservation/cash/AUTO/DAILY limits remain mandatory; UNKNOWN remains unknown. Confirmed supplier cancellation after payment does not confirm a refund or restore spendable funds. Wrong evidence, revised terms, and financial cancellation require dedicated reconciliation, not force paid/state buttons.
 
+## Executed acceptance checkpoint
+
+Source `b6dae8c1bdf4491b00c18d4e83aed49de2549693` passed application Docker image builds, Compose init/migrations/start, actual Chromium UI/security supplier paths, and normal PostgreSQL/Redis/application restart persistence in run 36207399204. Ordinary/Python 3.12/PostgreSQL 16/Redis/frontend gates passed in run 36207399192. Compose acceptance used PostgreSQL 17. This is synthetic acceptance, not a production pilot or proof of disaster recovery. Read the source-matched artifacts for later commits.
+
 ## Remaining production checks
 
-Docker clean build/start/restart; role/CSRF/ack/proof/download browser E2E; failure/load tests and restore drill; supplier spreadsheet review; dependency/security review and least-privilege DB roles; secrets management/key rotation/retention/MFA; incident/alerting/monitoring. Existing backend/frontend source and passing isolated tests do not close these gates.
+Cross-browser/mobile acceptance and production HTTPS; failure/load tests and backup restore drill; supplier spreadsheet review; dependency/security review and least-privilege DB roles; secrets management/key rotation/retention/MFA; incident/alerting/monitoring. Existing backend/frontend source and passing isolated tests do not close these gates.
 
 ## External dependencies
 

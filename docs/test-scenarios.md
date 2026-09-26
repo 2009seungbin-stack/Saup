@@ -39,3 +39,11 @@ Additional tests cover roles/session/CSRF/origin/rate limits/redaction, formula/
 `test_supplier_postgres.py` (real service required): concurrent identical acknowledgement creates one payment; concurrent evidence and admin confirmation create one receipt/confirmation/journal; concurrent duplicate tracking creates one shipment/job; append-only DB triggers; competing incompatible acknowledgements have one winner and a deterministic conflict. Existing PostgreSQL test now migrates through 0002. Redis tests include distributed sharing and fail-closed unavailable connection.
 
 `scripts/demo_supplier_operations.py` uses temporary synthetic SQLite databases and both payment policies, with accepted/rejected lines and repeated commands, tracking import and mock marketplace update. No browser, Docker or live provider execution is implied. `scripts/verify_phase10.py` records exact checks/source hashes/coverage/logs and fails configured infrastructure gates on skip. See phase10-verification.md for executed results.
+
+## Actual Docker/Chromium acceptance
+
+`tests_browser/test_supplier_console.py` is a separately selected suite of seven real browser cases, not HTTP mocks: complete UI-created mixed batch/file/export/send/ack/evidence/admin confirmation/tracking flow; viewer PII/mutation restrictions; CSRF/Origin/session contract; price-change review without payment; cancellation before/after send; and labelled demo-provider shipment. Identical commands/imports do not add financial/shipment effects.
+
+`tests/test_acceptance_fixture.py` adds 21 ordinary cases for environment/credential/one-shot guards and rejection of incomplete, duplicate or unbalanced verification results. The existing login-rate-limit test fixes only its clock to test both the same-minute 11th-request rejection and the next-minute reset without wall-clock flakiness.
+
+The acceptance workflow compares durable PostgreSQL order/payment/evidence/shipment IDs, counts and account/journal balances before and after DB/Redis/API/worker/web restart. It rejects zero, incomplete or skipped browser selection. See `phase10-acceptance.md` for isolation and reproduction. This does not exercise live payments, real supplier acceptance or backup restore.

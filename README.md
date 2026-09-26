@@ -8,7 +8,7 @@ Python 3.12+, FastAPI, SQLAlchemy 2, Alembic, PostgreSQL, Redis와 Next.js 운�
 
 기본 브랜치는 `main`입니다. Phase 10의 기준 main 커밋은 `b1f1f15ac3b6a396fe9f14e549f11721f49bfb7f`이며 변경은 `feat/phase10-supplier-operations`에서 리뷰합니다. main에 전체 소스가 없다는 과거 인수인계 문구는 더 이상 현재 상태가 아닙니다. 과거 ZIP은 provenance 자료이며 현재 source of truth는 Git 저장소입니다. 과거 기록은 `docs/history/`에 보존했습니다.
 
-실행된 검사와 미실행 검사를 구분한 최신 기록은 `docs/phase10-verification.md`와 해당 커밋의 GitHub Actions 아티팩트에 있습니다. 첫 전체 GitHub Actions 실행 `36151766961`에서 188개 테스트(일반 183 + PostgreSQL 3 + Redis 2), 커버리지 90.60%, 프런트엔드 설치·타입 검사·프로덕션 빌드가 실제 통과했습니다. 검증 커밋은 `bdf716666ccb3261b4d7ba188733b0bb7c6947f7`이며 이후 변경은 새 실행 결과를 확인해야 합니다. 현재 자동화율은 측정하지 않았고 production-ready라고 선언하지 않습니다.
+검증 체크포인트 `b6dae8c1bdf4491b00c18d4e83aed49de2549693`에서 일반 204개·PostgreSQL 3개·Redis 2개와 실제 Chromium 브라우저 7개, 총 216개가 통과했습니다. 일반 CI `36207399192`와 Docker/브라우저 CI `36207399204`가 모두 성공했으며 이미지 빌드·Compose 기동·DB/Redis 포함 재시작 전후 거래 보존도 확인했습니다. 정확한 실행 결과는 `docs/phase10-verification.md`와 소스 SHA가 일치하는 Actions 아티팩트를 기준으로 하며, 이후 커밋은 새 실행을 확인해야 합니다. 현재 자동화율은 측정하지 않았고 production-ready라고 선언하지 않습니다.
 
 ## 새 공급사 Excel 경로
 
@@ -33,7 +33,7 @@ python scripts/bootstrap.py
 docker compose up --build
 ```
 
-관리자 비밀번호는 bootstrap 출력으로 확인합니다. Web은 `http://localhost:3000`, API는 `http://localhost:8000`입니다. Docker 설정 제공은 Docker 기동 검증을 뜻하지 않습니다. 직접 실행, 환경 변수와 배포 주의점은 `docs/deployment.md`를 참고하세요. 마이그레이션 시 `DATABASE_URL`을 명시하고 `alembic upgrade head`를 실행합니다. 운영 마이그레이션은 `.env` 자동 로딩에 의존하지 않습니다.
+관리자 비밀번호는 bootstrap 출력으로 확인합니다. Web은 `http://localhost:3000`, API는 `http://localhost:8000`입니다. 일회용 데모 Compose의 빌드·기동·재시작은 실제 검증했으나 운영 배포·장애 복구를 증명하지 않습니다. 직접 실행, 환경 변수와 배포 주의점은 `docs/deployment.md`를 참고하세요. 마이그레이션 시 `DATABASE_URL`을 명시하고 `alembic upgrade head`를 실행합니다. 운영 마이그레이션은 `.env` 자동 로딩에 의존하지 않습니다.
 
 ## 재현 가능한 검증
 
@@ -64,9 +64,10 @@ python -m scripts.demo_supplier_operations --output reports/phase10/synthetic.js
 | `apps/api/routers/` | 분리된 인증 및 공급사 운영 라우터 |
 | `apps/web/components/suppliers/` | 배치·접수·지급 증빙 운영 화면 |
 | `.github/workflows/ci.yml` | 단위/통합/프런트엔드 검증 및 실행 증거 |
+| `.github/workflows/acceptance.yml`, `tests_browser/` | 실제 Docker/Chromium 거래·권한·재시작 검증 |
 
 ## 안전성과 남은 차단 요인
 
 `REAL_PAYMENTS_ENABLED=true`는 인증된 실지급 커넥터가 없어 여전히 시작을 거부합니다. 수동 확인은 이미 외부에서 처리된 지급에 대한 명시적 관리자 증거 기록이며 은행 API가 아닙니다. `UNKNOWN` 지급은 자동 재송금하지 않습니다. 공급사별 예치금은 서로 섞지 않습니다. 일반 JSON 목록에는 고객 주소·전화나 암호문을 내보내지 않으며, 발주 파일 자체는 암호화 보관·권한 확인·PII 반출 감사를 적용합니다.
 
-실제 공급사 템플릿/승인된 지급처/잔액 증거와 실제 마켓 권한, Docker·브라우저 E2E, 보안/복구/운영 부하 검증은 별도 production gate입니다. 자세한 범위는 `HANDOFF.md`, `docs/supplier-excel.md`, `docs/payment-safety.md`, `docs/production-gates.md`에 있습니다.
+실제 공급사 템플릿/승인된 지급처/잔액 증거와 실제 마켓 권한, 운영 HTTPS·보안·백업 복구·부하·다른 브라우저 검증은 별도 production gate입니다. Docker/Chromium 재현은 `docs/phase10-acceptance.md`에 있습니다. 자세한 범위는 `HANDOFF.md`, `docs/supplier-excel.md`, `docs/payment-safety.md`, `docs/production-gates.md`에 있습니다.
