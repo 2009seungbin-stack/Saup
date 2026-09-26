@@ -85,7 +85,7 @@ def send_ui(page, value):
 def acknowledge_ui(page, value, *, reject_id=None, changed_amount=None):
     for line in value['items']:
         group = page.get_by_role('group', name=line['supplier_order_id'], exact=True)
-        group.get_by_label('실제 공급사 응답', exact=True).select_option('ORDER_NOT_ACCEPTED' if line['supplier_order_id'] == reject_id else 'ACCEPTED')
+        group.get_by_role('combobox', name='실제 공급사 응답', exact=True).select_option('ORDER_NOT_ACCEPTED' if line['supplier_order_id'] == reject_id else 'ACCEPTED')
         if changed_amount is not None:
             group.get_by_text('공급사가 변경 조건을 통보했습니다', exact=True).click()
             group.get_by_label('통보 총액', exact=True).fill(str(changed_amount))
@@ -126,12 +126,12 @@ def test_manual_evidence_supplier_transaction(pages, fixture_data):
         created.append(response.value.json()['id'])
     rows = [r for r in eligible(page, created) if r['order_id'] in created]
     suppliers(page); page.get_by_text('새 발주 배치 생성', exact=True).click()
-    page.get_by_label('공급사', exact=True).select_option(fixture_data['supplier_id'])
-    page.get_by_label('고정할 프로필', exact=True).select_option(fixture_data['profile_id'])
+    page.get_by_role('combobox', name='공급사', exact=True).select_option(fixture_data['supplier_id'])
+    page.get_by_role('combobox', name='고정할 프로필', exact=True).select_option(fixture_data['profile_id'])
     for row in rows: page.locator('label.check').filter(has_text=row['id']).get_by_role('checkbox').check()
     with page.expect_response(lambda r: r.url.endswith('/v1/supplier-order-batches') and r.request.method == 'POST') as response:
         page.get_by_role('button', name='2건 배치 생성', exact=True).click()
-    assert response.value.status == 200
+    assert response.value.status == 201
     value = response.value.json(); create_command = response.value.request.post_data_json
     expect(page.get_by_role('heading', name=value['id'], exact=True)).to_be_visible()
     assert value['status'] == 'FILE_READY' and value['profile_version'] == fixture_data['profile_version']
@@ -192,6 +192,10 @@ def test_manual_evidence_supplier_transaction(pages, fixture_data):
     expect(confirm_button).not_to_be_visible()
     assert ok(api(admin, f"/v1/supplier-payments/{accepted['payment_id']}"))['status'] == 'SUCCEEDED'
     ok(api(admin, f"/v1/supplier-payment-evidence/{payment['evidence_id']}/confirm", 'POST', confirmation))
+    page.reload(); open_batch(page, value['id'])
+    page.get_by_role('button', name='지급 증빙', exact=True).click()
+    expect(page.get_by_text('관리자 지급 증빙 확인이 완료되었습니다. 이 화면에서 송금을 실행한 것은 아닙니다.', exact=True)).to_be_visible()
+    expect(page.get_by_text('관리자 확인 대기 중입니다. 운영자는 지급 확정을 수행할 수 없습니다.', exact=True)).not_to_be_visible()
     external = next(o for o in ok(api(page, '/v1/orders')) if o['id'] == accepted['order_id'])['external_id']
     content = tracking_file(accepted['supplier_order_id'], external, '001234567890')
     first = import_ui(page, fixture_data['profile_id'], content)
