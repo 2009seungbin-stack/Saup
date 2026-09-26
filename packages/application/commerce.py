@@ -1,6 +1,7 @@
 """Transactional order orchestration. No network call is made inside a money transaction."""
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
+from contextlib import nullcontext
 from sqlalchemy import select
 from pydantic import ValidationError
 from packages.domain.errors import DomainError, IntegrationError
@@ -399,6 +400,9 @@ class Commerce:
     def sync_shipment(self, shipment_id):
         with self.factory() as s:
             row = s.get(Shipment, shipment_id); order = s.get(Order, row.order_id)
+            if s.scalar(select(AuditEvent.id).where(AuditEvent.entity_id == order.id,
+                    AuditEvent.event == 'ORDER_IMPORTED_FROM_FILE')):
+                raise IntegrationError('MANUAL_EXTERNAL_SHIPMENT_CONFIRMATION_REQUIRED', retryable=False)
             payload = {"external_id": order.external_id, "external_line_id": order.external_line_id,
                        "courier": row.courier, "tracking": row.tracking}
             channel = order.marketplace
@@ -407,8 +411,8 @@ class Commerce:
             lock_treasury(s); row = s.get(Shipment, shipment_id); row.marketplace_synced = True
             audit(s, "MARKETPLACE_SHIPMENT_UPDATED", row.order_id, correlation_id=s.get(Order, row.order_id).correlation_id)
 
-    def delivered(self, order_id):
-        with self.factory.begin() as s:
+    def delivered(self, order_id, *, session=None):
+        with (nullcontext(session) if session is not None else self.factory.begin()) as s:
             lock_treasury(s); order = s.get(Order, order_id)
             if order.delivered_at: return
             transition(s, order, "DELIVERED"); order.delivered_at = self.clock()
@@ -420,6 +424,9 @@ class Commerce:
         with self.factory() as s:
             listing = s.get(MarketplaceListing, listing_id)
             if listing.sync_revision != revision: return
+            if s.scalar(select(AuditEvent.id).where(AuditEvent.entity_id == listing_id,
+                    AuditEvent.event == 'LOCAL_LISTING_CREATED')):
+                raise IntegrationError('MANUAL_EXTERNAL_LISTING_CONFIRMATION_REQUIRED', retryable=False)
             channel = listing.marketplace
         try:
             self.registry.marketplace(channel).invoke("sync_listing", {"listing_id": listing_id,

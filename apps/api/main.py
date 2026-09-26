@@ -144,6 +144,8 @@ def create_app(settings=None, factory=None):
     from .routers.supplier_operations import create_supplier_operations_router
     auth_router, identity, viewer, operator, admin = create_auth_router(settings, factory, limiter)
     app.include_router(auth_router)
+    from .routers.operations import create_operations_router
+    app.include_router(create_operations_router(c, viewer, operator, admin))
     app.include_router(create_supplier_operations_router(c.supplier_operations, viewer, operator, admin))
     from .routers.order_intake import create_order_intake_router
     from packages.application.order_intake import OrderIntake
@@ -262,6 +264,11 @@ def create_app(settings=None, factory=None):
         with factory.begin() as s:
             lock_treasury(s)
             if not s.get(Supplier,data.supplier_id):raise DomainError('SUPPLIER_NOT_FOUND',404)
+            existing=s.scalar(select(SupplierExcelProfile).where(SupplierExcelProfile.name==data.name))
+            if existing:
+                if existing.supplier_id!=data.supplier_id or existing.mapping!=data.mapping.model_dump():
+                    raise DomainError('PROFILE_NAME_CONFLICT')
+                return {'id':existing.id}
             profile=SupplierExcelProfile(supplier_id=data.supplier_id,name=data.name,mapping=data.mapping.model_dump())
             s.add(profile);s.flush();audit(s,'SUPPLIER_PROFILE_CREATED',profile.id,actor=user['username'])
             return {'id':profile.id}

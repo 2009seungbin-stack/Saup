@@ -1,5 +1,10 @@
 # Saup 1.0 functional closure — bounded scope, not another architecture phase
 
+The closeout implementation and fresh-install acceptance now live in
+`functional-closeout.md`. The table and PR #6 checkpoint below describe the
+starting gaps, not the current implementation. Completion still requires all
+exact-head checks and separate post-merge execution evidence.
+
 The goal is an operator-complete file-based workflow, not a growing table/test count.
 The following scope is fixed. Work outside it requires a separate decision; live
 provider access does not become implemented merely by entering credentials.

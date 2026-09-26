@@ -97,7 +97,16 @@ def test_operational_file_intake_to_supplier_shipment(pages, fixture_data):
     expect(admin.get_by_text('관리자 지급 증빙 확인이 완료되었습니다. 이 화면에서 송금을 실행한 것은 아닙니다.', exact=True)).to_be_visible()
     tracking = tracking_file(so['id'], external, '007777777777')
     import_ui(page, fixture_data['profile_id'], tracking)
-    result = eventually(lambda: docker_fixture('snapshot')['orders'][order_id], lambda x: x['marketplace_synced'])
+    result = eventually(lambda: docker_fixture('snapshot')['orders'][order_id], lambda x: x['shipment_id'] is not None and x['shipment_job_statuses']==['DEAD'])
+    assert not result['marketplace_synced']
+    work = ok(api(admin, '/v1/operations'))
+    shipment = next(x for x in work['shipments'] if x['order_id']==order_id)
+    confirmation = {k:shipment[k] for k in ('marketplace','external_order_id','external_line_id','tracking_hash')}
+    confirmation.update(reference='synthetic-intake-shipment-confirmation',evidence_hash=sha256(b'synthetic-intake-shipment').hexdigest(),confirmed=True)
+    first = ok(api(admin,f"/v1/shipments/{shipment['id']}/external-confirmation",'POST',confirmation))
+    assert first == ok(api(admin,f"/v1/shipments/{shipment['id']}/external-confirmation",'POST',confirmation))
+    result = docker_fixture('snapshot')['orders'][order_id]
+    assert result['manual_shipment_confirmation']
     assert result['payment_id'] == payment_id and result['payment_status'] == 'SUCCEEDED'
     assert result['supplier_state'] == 'SHIPPED' and result['shipment_jobs'] == 1
     (REPORTS / 'order-intake-result.json').write_text(json.dumps({

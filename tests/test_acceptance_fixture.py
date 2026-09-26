@@ -70,7 +70,7 @@ def test_acceptance_seed_refuses_existing_orders(env, order_input):
 
 
 def completed():
-    return {'schema_revision': '0004', 'balanced_journals': True, 'orders': {'one': {
+    return {'schema_revision': '0005', 'balanced_journals': True, 'orders': {'one': {
         'supplier_state':'SHIPPED', 'payment_id':'payment-one', 'payment_status':'SUCCEEDED',
         'marketplace_synced':True, 'shipment_jobs':1, 'shipment_job_statuses':['DONE']}}}
 
@@ -110,7 +110,7 @@ def test_acceptance_verifier_rejects_inconsistent_marketplace_reconciliation(cha
         verify_completed(result)
 
 
-def test_acceptance_verifier_accepts_reconciled_cancellation_and_requires_0004():
+def test_acceptance_verifier_accepts_reconciled_cancellation_and_requires_0005():
     result = deepcopy(completed()); result['orders']['two'] = reconciled_order(); verify_completed(result)
     result['schema_revision'] = '0003'
     with pytest.raises(RuntimeError, match='SCHEMA_OR_LEDGER'):verify_completed(result)

@@ -1,0 +1,4 @@
+# Disposable acceptance override: only treasury accounts and bootstrap admin.
+services:
+  init:
+    command: [sh, -c, "alembic upgrade head && python -m scripts.init_db"]

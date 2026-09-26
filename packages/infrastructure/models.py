@@ -1,5 +1,5 @@
 from sqlalchemy.orm import DeclarativeBase
-from . import schema_v4 as schema
+from . import schema_v5 as schema
 
 class Base(DeclarativeBase):
     metadata = schema.metadata
@@ -50,3 +50,7 @@ class ReviewResolution(Base): __table__ = schema.review_resolutions
 class MarketplaceRefundEvidence(Base): __table__ = schema.marketplace_refund_evidence
 class MarketplaceCancellationStatement(Base): __table__ = schema.marketplace_cancellation_statements
 class MarketplaceCancellationReconciliation(Base): __table__ = schema.marketplace_cancellation_reconciliations
+
+class OperationalReceipt(Base): __table__ = schema.operational_receipts
+class SettlementRevision(Base): __table__ = schema.settlement_revisions
+class CancellationStatementRevision(Base): __table__ = schema.cancellation_statement_revisions

@@ -1,0 +1,83 @@
+name: Blank install functional closure
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: closure-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  blank-install:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      COMPOSE_PROJECT_NAME: saup-acceptance-blank-${{ github.run_id }}
+      COMPOSE_FILE: docker-compose.yml:docker/compose.blank.yml
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Preserve exact source
+        run: |
+          mkdir -p reports/blank
+          git rev-parse HEAD > reports/blank/source-sha.txt
+          git status --porcelain > reports/blank/source-status-before.txt
+          git archive --format=zip HEAD > reports/blank/source.zip
+          python scripts/bootstrap.py > /dev/null
+      - name: Build and migrate a blank business installation
+        run: |
+          set -o pipefail
+          docker compose build --pull 2>&1 | tee reports/blank/build.log
+          docker compose up -d --wait --wait-timeout 180 2>&1 | tee reports/blank/startup.log
+          curl --fail --retry 30 --retry-all-errors --retry-delay 2 http://localhost:3000/api/ready > reports/blank/ready.json
+      - name: Install acceptance tools
+        run: |
+          python -m pip install -e '.[test]' -r tests_browser/requirements.txt
+          python -m playwright install --with-deps chromium
+      - name: Actual Chromium and ordinary API blank-install acceptance
+        run: |
+          set -o pipefail
+          python -m pytest -q tests_browser_blank --junitxml=reports/blank/browser.xml 2>&1 | tee reports/blank/browser.log
+      - name: Durable snapshot before and after normal restart
+        run: |
+          set -o pipefail
+          docker compose exec -T -e SAUP_ACCEPTANCE=1 -e COMPOSE_PROJECT_NAME="$COMPOSE_PROJECT_NAME" api python -m scripts.closure_snapshot > reports/blank/before.json
+          docker compose restart db redis api worker web 2>&1 | tee reports/blank/restart.log
+          curl --fail --retry 30 --retry-all-errors --retry-delay 2 http://localhost:3000/api/ready > reports/blank/ready-after.json
+          docker compose exec -T -e SAUP_ACCEPTANCE=1 -e COMPOSE_PROJECT_NAME="$COMPOSE_PROJECT_NAME" api python -m scripts.closure_snapshot > reports/blank/after.json
+          python - <<'PY'
+          import json
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
+          root=Path('reports/blank')
+          assert json.loads((root/'before.json').read_text())==json.loads((root/'after.json').read_text())
+          cases=list(ET.parse(root/'browser.xml').iter('testcase'))
+          assert len(cases)==1 and all(not any(c.find(k) is not None for k in ['failure','error','skipped']) for c in cases)
+          (root/'result.json').write_text(json.dumps({'source_sha':(root/'source-sha.txt').read_text().strip(),
+            'browser_cases':len(cases),'docker_build':True,'migration':'0005','blank_install':True,'restart_persistence':True,
+            'backup_restore_tested':False,'live_providers_tested':False},indent=2)+'\n')
+          PY
+          git diff --exit-code
+      - name: Collect diagnostics
+        if: always()
+        run: |
+          docker compose ps -a > reports/blank/services.txt || true
+          docker compose logs --no-color > reports/blank/compose.log 2>&1 || true
+          git status --porcelain > reports/blank/source-status-after.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: blank-install-${{ github.run_id }}
+          path: reports/blank/
+          if-no-files-found: error
+      - name: Remove only the disposable acceptance project
+        if: always()
+        run: docker compose down --volumes --remove-orphans
