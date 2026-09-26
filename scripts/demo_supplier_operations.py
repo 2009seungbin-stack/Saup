@@ -31,6 +31,7 @@ def demonstrate(payment_path):
             with Operations.context(MigrationContext.configure(connection)):
                 importlib.import_module('migrations.versions.0001_initial').upgrade()
                 importlib.import_module('migrations.versions.0002_supplier_operations').upgrade()
+                importlib.import_module('migrations.versions.0003_review_resolution').upgrade()
         try:
             ids=seed(settings,factory,demo=True);c=Commerce(settings,factory);worker=Worker(c);worker.drain()
             c.clock=lambda:datetime.now(timezone.utc).replace(hour=3,minute=0,second=0,microsecond=0)

@@ -1,8 +1,12 @@
 # Saup · 위탁판매 운영 기반
 
-**Phase 10 — Real Supplier Operations. 실제 마켓·실결제 커넥터는 미승인 상태입니다.**
+**Phase 10 운영 기반 + Phase 11A 검토 해결 개발 브랜치. 실제 마켓·실결제 커넥터는 미승인 상태입니다.**
 
 Python 3.12+, FastAPI, SQLAlchemy 2, Alembic, PostgreSQL, Redis와 Next.js 운영 콘솔을 사용합니다. 기존 아키텍처를 유지하면서 Excel 공급사의 발주 묶음·전송·접수·증빙 지급·배송 대기를 연결합니다. PostgreSQL이 운영 데이터의 기준이며 Excel·메신저·운영자 메모는 외부 증거입니다.
+
+## Phase 11A 개발 범위
+
+현재 변경은 미확정 지급 증빙의 이력 보존 정정과 지급 후·배송 전 공급사 전액 환급 확인을 추가합니다. 고객 환불·주문 종료는 별도 검토로 남습니다. 병합·CI 상태는 해당 PR/소스 SHA를 확인하며, 범위와 제한은 `docs/phase11-review-resolution.md`를 참고하세요.
 
 ## 소스와 검증의 기준
 
@@ -59,7 +63,8 @@ python -m scripts.demo_supplier_operations --output reports/phase10/synthetic.js
 |---|---|
 | `packages/application/supplier_operations.py` | 배치·접수·증빙·취소·가드가 있는 복구 명령 |
 | `packages/domain/supplier_operations.py` | 공급사 상태 전이와 엄격한 입력 계약 |
-| `packages/infrastructure/schema_v2.py` | v1을 수정하지 않고 확장한 36개 런타임 테이블 |
+| `packages/infrastructure/schema_v3.py` | 동결된 v1/v2 위에 추가한 40개 런타임 테이블 |
+| `migrations/versions/0003_review_resolution.py` | 증빙 정정·확인 연결·환급·해결 이력 4개 테이블 |
 | `migrations/versions/0002_supplier_operations.py` | 신규 8개 테이블, Review 해결 이력, 기존 Excel 주문 격리 |
 | `apps/api/routers/` | 분리된 인증 및 공급사 운영 라우터 |
 | `apps/web/components/suppliers/` | 배치·접수·지급 증빙 운영 화면 |

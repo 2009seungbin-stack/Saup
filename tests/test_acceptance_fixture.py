@@ -70,7 +70,7 @@ def test_acceptance_seed_refuses_existing_orders(env, order_input):
 
 
 def completed():
-    return {'schema_revision': '0002', 'balanced_journals': True, 'orders': {'one': {
+    return {'schema_revision': '0003', 'balanced_journals': True, 'orders': {'one': {
         'supplier_state':'SHIPPED', 'payment_id':'payment-one', 'payment_status':'SUCCEEDED',
         'marketplace_synced':True, 'shipment_jobs':1, 'shipment_job_statuses':['DONE']}}}
 

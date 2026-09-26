@@ -36,3 +36,8 @@ Operators register immutable SupplierPaymentEvidence with exact payment/supplier
 Manual approval does not override DAILY_PAYMENT_LIMIT. A higher-than-AUTO amount still requires the existing admin approval path. Supplier deposits cannot fund another supplier and remain nonnegative; confirmation posts balanced supplier-specific entries and spends the existing reservation. Only confirmed credits are spendable. Duplicate evidence/confirmation is idempotent; differing metadata conflicts. UNKNOWN/SENDING cannot become a manual evidence retry. The old REAL_PAYMENTS_ENABLED startup gate is unchanged.
 
 Proof or a completed/ambiguous payment means money exposure during cancellation. A supplier cancellation confirmation retains FINANCIAL_REVIEW and does not release money, invent a supplier refund, or restore inventory. Correcting mistaken evidence and reconciling actual refunds require dedicated follow-up commands; there is no force paid button. Audit events use IDs, amounts and hashes, not customer PII.
+
+
+## Phase 11A bounded review resolution
+
+Phase 11A correction holds block manual confirmation. Only unconfirmed proof reference/hash can be versioned; every later confirmation binds the effective revision. Full pre-shipment supplier recovery requires actual receipt evidence, original payment journal and exact supplier/bank allocation; it never marks the customer refunded. Shared receipt namespace and unique recovery hash prevent duplicate credits. See phase11-review-resolution.md for unsupported cases.

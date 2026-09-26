@@ -1,12 +1,16 @@
-# Saup Phase 10 인수인계
+# Saup 인수인계 · Phase 10 기반 / Phase 11A 개발
 
 갱신 기준: 2026-09-26 병합 후. 저장소 `2009seungbin-stack/Saup`, 기본 브랜치 `main`. Phase 10 기능 PR #2는 병합되었습니다.
+
+## Phase 11A 후속 작업 · 2026-09-26
+
+이 브랜치는 기본 커밋 `77f5589c3ed4473cc8bca315e9e416cde162e7a0` 위에 증빙 정정·공급사 환급 대사의 제한된 해결 명령을 추가합니다. migration 0003과 전용 콘솔/API/검증을 포함하며 운영 배포는 하지 않습니다. 상세 인수인계와 미구현 범위는 `docs/phase11-review-resolution.md`를 기준으로 하세요. 아래 Phase 10 검증은 역사적 체크포인트입니다.
 
 ## 현재 소스의 기준
 
 Phase 10의 main 통합 체크포인트는 `3983ca576d63eccd47d722457d1245c3e20c0fd6`입니다. PR #2의 검증된 head `afe7a488af12e16bb284f9e9ea28f297359d9bbc`와 파일 tree가 같습니다. 병합은 완료되었지만 운영 배포와 실결제 활성화는 하지 않았습니다. 통합 이후 문서 커밋을 포함한 최신 head는 Git과 해당 SHA의 Actions로 확인합니다. 병합 후 검증은 `docs/phase10-main-merge.md`를 기준으로 하며 아래 체크포인트는 날짜가 있는 과거 검증 기록입니다. `docs/history/`의 초기 ZIP 인수인계는 날짜가 표시된 과거 기록입니다.
 
-## 구현 범위
+## Phase 10 구현 범위 · 아래는 기반 기능 기록
 
 `SupplierOrderIntent`, `SupplierOrderBatch`, `SupplierOrderBatchItem`, `SupplierBatchAcknowledgement`, `SupplierPaymentEvidence`, `SupplierPaymentConfirmation`, `SupplierCancellation`, `OperationalIntervention`의 8개 테이블을 추가했습니다. 기존 28개 테이블과 금융 불변식을 유지합니다. `schema_v1.py`와 migration 0001은 수정하지 않았습니다. migration 0002는 기존 Excel 주문의 외부 상태를 추정하지 않고 `LEGACY_SUPPLIER_STATE_UNVERIFIED` 검토로 격리합니다.
 
@@ -36,8 +40,8 @@ Phase 10의 main 통합 체크포인트는 `3983ca576d63eccd47d722457d1245c3e20c
 
 검증 체크포인트 `b6dae8c1bdf4491b00c18d4e83aed49de2549693`에서 일반 204개·PostgreSQL 3개·Redis 2개와 실제 Chromium 브라우저 7개, 총 216개가 통과했습니다. 일반 CI `36207399192`와 Docker/브라우저 CI `36207399204`가 모두 성공했으며 이미지 빌드·Compose 기동·DB/Redis 포함 재시작 전후 거래 보존도 확인했습니다. 전체 원시 증거와 이전 실패·수정 기록은 `docs/phase10-verification.md`에 구분했습니다. 로컬 Python 3.13 결과를 CI Python 3.12 결과로 대체하지 않습니다. 이후 커밋은 해당 SHA의 새 검증이 필요합니다.
 
-이번 후속 변경은 검증 인프라와 실제 완료된 증빙의 UI 상태 표시 수정에 한정했습니다. 금융 로직·DB 마이그레이션·실결제 가드는 변경하지 않았습니다. 로그인 제한 테스트는 제한 로직을 바꾸지 않고 시계만 고정해 분 경계의 오검출을 제거했습니다.
+이전 Phase 10 인수 검증 변경은 검증 인프라와 실제 완료된 증빙의 UI 상태 표시 수정에 한정했습니다. 그때는 금융 로직·DB 마이그레이션·실결제 가드를 변경하지 않았습니다. 로그인 제한 테스트는 제한 로직을 바꾸지 않고 시계만 고정해 분 경계의 오검출을 제거했습니다.
 
 내부 후속 검증: Firefox/WebKit·모바일, 운영 HTTPS, 부하/장애/백업 복원, 증빙 저장소/보존 정책, 최소권한 DB/키 회전/MFA, 실제 공급사 템플릿 검수. 외부 차단: 공급사 계약·실제 파일 프로필·지급처/예치금 근거, 공식 마켓/지급 API 접근권한. `REAL_PAYMENTS_ENABLED`는 계속 차단입니다.
 
-다음 대형 기능은 Phase 10 검증을 끝낸 뒤 결정합니다. 우선 후보는 기존 차단 상태를 안전하게 푸는 Review Resolution Engine입니다. 다중 주문행, 분할배송/재배송, 정산 배치, worker lease renewal, 실마켓 연동은 이번 변경에서 시작하지 않았습니다.
+Phase 11A는 위에 명시한 제한된 검토 해결부터 시작했습니다. 나머지 해결 범위는 전용 명령과 별도 검증이 필요합니다. 다중 주문행, 분할배송/재배송, 정산 배치, worker lease renewal, 실마켓 연동은 이번 변경에서 시작하지 않았습니다.

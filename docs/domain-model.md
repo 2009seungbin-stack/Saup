@@ -36,3 +36,8 @@ There is at most one `SupplierOrder`, `Payment`, cash `Reservation` and `Shipmen
 Review now supports OPEN/ACKNOWLEDGED/RESOLVED plus resolution_code/resolved_by/resolved_at. Typed commands resolve only their satisfied issue; audit history preserves reopening and previous resolution. Acknowledgement remains "seen", not business resolution. The global treasury lock is acquired before supplier/order/payment changes; database unique constraints prevent duplicate memberships, payments, receipts, confirmations, shipments and jobs.
 
 Migration 0002 never edits frozen schema_v1 or 0001. Existing Excel supplier orders are explicitly held for legacy review; populated downgrade is blocked. See supplier-excel/payment-safety for recovery and privacy behavior.
+
+
+## Phase 11A bounded review resolution
+
+Phase 11A raises runtime metadata to 40 tables and adds four immutable history entities in schema_v3/migration 0003: SupplierEvidenceRevision, SupplierEvidenceConfirmationBinding, SupplierCancellationRecovery and ReviewResolution. Old schemas and journals remain unchanged. See phase11-review-resolution.md.

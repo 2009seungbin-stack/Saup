@@ -15,7 +15,8 @@ from packages.infrastructure.db import database
 from packages.infrastructure.models import (
     User, Supplier, SupplierExcelProfile, MarketplaceListing, Order, SupplierOrder,
     Payment, SupplierPaymentEvidence, SupplierPaymentConfirmation, Shipment, Job,
-    Reservation, AuditEvent, Journal, Posting, Account, ImportBatch,
+    Reservation, AuditEvent, Journal, Posting, Account, ImportBatch, SupplierEvidenceRevision,
+    SupplierEvidenceConfirmationBinding, SupplierCancellationRecovery, ReviewResolution,
 )
 from packages.infrastructure.security import hash_password
 from packages.application.common import lock_treasury, audit
@@ -61,8 +62,16 @@ def snapshot(factory):
     with factory() as s:
         result = {'synthetic_only': True, 'schema_revision': s.scalar(text('SELECT version_num FROM alembic_version')),
                   'accounts': {a.code: a.balance for a in s.scalars(select(Account))}, 'orders': {}, 'counts': {}}
-        for cls in (Order, SupplierOrder, Payment, SupplierPaymentEvidence, SupplierPaymentConfirmation, Shipment, ImportBatch):
+        for cls in (Order, SupplierOrder, Payment, SupplierPaymentEvidence, SupplierPaymentConfirmation, Shipment, ImportBatch,
+                SupplierEvidenceRevision, SupplierEvidenceConfirmationBinding, SupplierCancellationRecovery, ReviewResolution):
             result['counts'][cls.__table__.name] = s.scalar(select(func.count()).select_from(cls))
+        safe_fields = {'id','evidence_id','review_id','supersedes_id','revision','confirmation_id','revision_id',
+                       'cancellation_id','payment_id','supplier_id','journal_id','amount','bank_amount',
+                       'deposit_amount','payload_hash','actor','action'}
+        result['resolution_records'] = {cls.__table__.name: [
+            {column.name: getattr(row, column.name) for column in cls.__table__.columns if column.name in safe_fields}
+            for row in s.scalars(select(cls).order_by(cls.id))]
+            for cls in (SupplierEvidenceRevision, SupplierEvidenceConfirmationBinding, SupplierCancellationRecovery, ReviewResolution)}
         for order in s.scalars(select(Order).order_by(Order.id)):
             so = s.scalar(select(SupplierOrder).where(SupplierOrder.order_id == order.id))
             p = s.scalar(select(Payment).where(Payment.order_id == order.id))
@@ -91,7 +100,7 @@ def snapshot(factory):
 
 
 def verify_completed(result):
-    if result['schema_revision'] != '0002' or not result['balanced_journals']:
+    if result['schema_revision'] != '0003' or not result['balanced_journals']:
         raise RuntimeError('ACCEPTANCE_SCHEMA_OR_LEDGER_INVARIANT_FAILED')
     shipped = [o for o in result['orders'].values() if o['supplier_state'] == 'SHIPPED']
     if not shipped:

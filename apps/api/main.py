@@ -145,6 +145,9 @@ def create_app(settings=None, factory=None):
     auth_router, identity, viewer, operator, admin = create_auth_router(settings, factory, limiter)
     app.include_router(auth_router)
     app.include_router(create_supplier_operations_router(c.supplier_operations, viewer, operator, admin))
+    from .routers.review_resolution import create_review_resolution_router
+    from packages.application.review_resolution import ReviewResolutionService
+    app.include_router(create_review_resolution_router(ReviewResolutionService(c), viewer, operator, admin))
 
     def demo_only():
         if settings.app_mode not in {'demo','test'}: raise DomainError('DEMO_DISABLED',403)
