@@ -6,7 +6,7 @@ Python 3.12+, FastAPI, SQLAlchemy 2, Alembic, PostgreSQL, Redis와 Next.js 운�
 
 ## 소스와 검증의 기준
 
-기본 브랜치는 `main`입니다. Phase 10의 기준 main 커밋은 `b1f1f15ac3b6a396fe9f14e549f11721f49bfb7f`이며 변경은 `feat/phase10-supplier-operations`에서 리뷰합니다. main에 전체 소스가 없다는 과거 인수인계 문구는 더 이상 현재 상태가 아닙니다. 과거 ZIP은 provenance 자료이며 현재 source of truth는 Git 저장소입니다. 과거 기록은 `docs/history/`에 보존했습니다.
+기본 브랜치는 `main`입니다. Phase 10은 PR #2를 통해 2026-09-26에 병합되었으며 통합 체크포인트는 `3983ca576d63eccd47d722457d1245c3e20c0fd6`입니다. 이는 배포나 실결제 활성화를 뜻하지 않습니다. 병합 후 실행과 병합 전 인수 검증은 `docs/phase10-main-merge.md`에서 소스별로 구분합니다. main에 전체 소스가 없다는 과거 인수인계 문구는 더 이상 현재 상태가 아닙니다. 과거 ZIP은 provenance 자료이며 현재 source of truth는 Git 저장소입니다. 과거 기록은 `docs/history/`에 보존했습니다.
 
 검증 체크포인트 `b6dae8c1bdf4491b00c18d4e83aed49de2549693`에서 일반 204개·PostgreSQL 3개·Redis 2개와 실제 Chromium 브라우저 7개, 총 216개가 통과했습니다. 일반 CI `36207399192`와 Docker/브라우저 CI `36207399204`가 모두 성공했으며 이미지 빌드·Compose 기동·DB/Redis 포함 재시작 전후 거래 보존도 확인했습니다. 정확한 실행 결과는 `docs/phase10-verification.md`와 소스 SHA가 일치하는 Actions 아티팩트를 기준으로 하며, 이후 커밋은 새 실행을 확인해야 합니다. 현재 자동화율은 측정하지 않았고 production-ready라고 선언하지 않습니다.
 

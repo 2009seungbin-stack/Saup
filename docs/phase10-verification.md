@@ -2,7 +2,7 @@
 
 ## Source identity and interpretation
 
-Repository `2009seungbin-stack/Saup`; feature `feat/phase10-supplier-operations`; PR #2. Foundation main remains `b1f1f15ac3b6a396fe9f14e549f11721f49bfb7f`. No merge, production deployment or real money movement is asserted. Executable code and migration history remain authoritative.
+Repository `2009seungbin-stack/Saup`; PR #2 was merged on 2026-09-26 at `3983ca576d63eccd47d722457d1245c3e20c0fd6`. See `phase10-main-merge.md` for the final pre-merge head and separately executed main CI. The checkpoints below remain historical evidence for their stated SHAs, not proof that later checks ran. No production deployment or real money movement is asserted. Executable code and migration history remain authoritative.
 
 The checkpoint below was executed before this documentation commit. Later commits, including documentation changes, require their own same-SHA Actions artifacts. Never combine results for different SHAs and call them one source-matched success.
 
